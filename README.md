@@ -1,16 +1,17 @@
 # pla
 
-[![Build Status](https://travis-ci.org/rakyll/pla.png?branch=master)](https://travis-ci.org/rakyll/pla)
-
 Pla is a tiny program that sends some load to a web application. It's similar to Apache Bench ([ab](http://httpd.apache.org/docs/2.2/programs/ab.html)), but with better availability across different platforms and a less troubling installation experience.
 
-Pla is originally written by Tarek Ziade in Python and is available on [tarekziade/pla](https://github.com/tarekziade/pla). But, due to its dependency requirements and my personal annoyance of maintaining concurrent programs in Python, I decided to rewrite it in Go.
+Pla is originally written by Burcu Dogan and is available on [rakyll/boom](https://github.com/rakyll/boom).
+Due to some issues like memory consumption and inability to stop an test
+and get a report and because i wanted it to say plaa I decided to fork
+it.
 
 ## Installation
 
 Simple as it takes to type the following command:
 
-    go get github.com/rakyll/pla
+    go get github.com/sschepens/pla
 
 ## Usage
 
