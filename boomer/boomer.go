@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rakyll/pb"
+	"github.com/sschepens/pb"
 )
 
 type result struct {
@@ -94,11 +94,16 @@ type Boomer struct {
 
 	bar     *pb.ProgressBar
 	results chan *result
+	stop    chan bool
 }
 
 func newPb(size int) (bar *pb.ProgressBar) {
 	bar = pb.New(size)
-	bar.Format("Bom !")
+	bar.BarStart = "Pl"
+	bar.BarEnd = "!"
+	bar.Empty = " "
+	bar.Current = "a"
+	bar.CurrentN = "a"
 	bar.Start()
 	return
 }

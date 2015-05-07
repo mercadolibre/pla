@@ -21,6 +21,8 @@ import (
 
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 )
 
@@ -28,9 +30,18 @@ import (
 // all work is done.
 func (b *Boomer) Run() {
 	b.results = make(chan *result, b.N)
+	b.stop = make(chan bool, 1)
 	if b.Output == "" {
 		b.bar = newPb(b.N)
 	}
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		b.stop <- true
+		close(b.stop)
+	}()
 
 	start := time.Now()
 	b.run()
@@ -56,8 +67,11 @@ func (b *Boomer) worker(wg *sync.WaitGroup, ch chan *http.Request) {
 		Proxy:               http.ProxyURL(b.ProxyAddr),
 	}
 	client := &http.Client{Transport: tr}
-	_ = client
-	for req := range ch {
+	for {
+		req, more := <-ch
+		if !more {
+			break
+		}
 		s := time.Now()
 		code := 0
 		size := int64(0)
@@ -70,7 +84,6 @@ func (b *Boomer) worker(wg *sync.WaitGroup, ch chan *http.Request) {
 		if b.bar != nil {
 			b.bar.Increment()
 		}
-		wg.Done()
 
 		b.results <- &result{
 			statusCode:    code,
@@ -79,27 +92,35 @@ func (b *Boomer) worker(wg *sync.WaitGroup, ch chan *http.Request) {
 			contentLength: size,
 		}
 	}
+	wg.Done()
 }
 
 func (b *Boomer) run() {
 	var wg sync.WaitGroup
-	wg.Add(b.N)
+	wg.Add(b.C)
 
 	var throttle <-chan time.Time
 	if b.Qps > 0 {
 		throttle = time.Tick(time.Duration(1e6/(b.Qps)) * time.Microsecond)
 	}
-	jobs := make(chan *http.Request, b.N)
+	jobs := make(chan *http.Request, b.C*2)
 	for i := 0; i < b.C; i++ {
 		go func() {
 			b.worker(&wg, jobs)
 		}()
 	}
+Loop:
 	for i := 0; i < b.N; i++ {
 		if b.Qps > 0 {
 			<-throttle
 		}
-		jobs <- b.Req.Request()
+		select {
+		case <-b.stop:
+			break Loop
+		case jobs <- b.Req.Request():
+			continue
+		}
+
 	}
 	close(jobs)
 
