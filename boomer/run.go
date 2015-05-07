@@ -39,6 +39,7 @@ func (b *Boomer) Run() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
+		b.bar.NotPrint = true
 		b.stop <- true
 		close(b.stop)
 	}()
