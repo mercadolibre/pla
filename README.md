@@ -1,22 +1,22 @@
-# boom
+# pla
 
-[![Build Status](https://travis-ci.org/rakyll/boom.png?branch=master)](https://travis-ci.org/rakyll/boom)
+[![Build Status](https://travis-ci.org/rakyll/pla.png?branch=master)](https://travis-ci.org/rakyll/pla)
 
-Boom is a tiny program that sends some load to a web application. It's similar to Apache Bench ([ab](http://httpd.apache.org/docs/2.2/programs/ab.html)), but with better availability across different platforms and a less troubling installation experience.
+Pla is a tiny program that sends some load to a web application. It's similar to Apache Bench ([ab](http://httpd.apache.org/docs/2.2/programs/ab.html)), but with better availability across different platforms and a less troubling installation experience.
 
-Boom is originally written by Tarek Ziade in Python and is available on [tarekziade/boom](https://github.com/tarekziade/boom). But, due to its dependency requirements and my personal annoyance of maintaining concurrent programs in Python, I decided to rewrite it in Go.
+Pla is originally written by Tarek Ziade in Python and is available on [tarekziade/pla](https://github.com/tarekziade/pla). But, due to its dependency requirements and my personal annoyance of maintaining concurrent programs in Python, I decided to rewrite it in Go.
 
 ## Installation
 
 Simple as it takes to type the following command:
 
-    go get github.com/rakyll/boom
+    go get github.com/rakyll/pla
 
 ## Usage
 
-Boom supports custom headers, request body and basic authentication. It runs provided number of requests in the provided concurrency level, and prints stats.
+Pla supports custom headers, request body and basic authentication. It runs provided number of requests in the provided concurrency level, and prints stats.
 ~~~
-Usage: boom [options...] <url>
+Usage: pla [options...] <url>
 
 Options:
   -n  Number of requests to run.
@@ -44,9 +44,9 @@ Options:
                         (default for current machine is 1 cores)
 ~~~
 
-This is what happens when you run Boom:
+This is what happens when you run Pla:
 
-	% boom -n 1000 -c 100 https://google.com
+	% pla -n 1000 -c 100 https://google.com
 	1000 / 1000 ∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎ 100.00 % 
 
 	Summary:
@@ -96,5 +96,5 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License. ![Analytics](https://ga-beacon.appspot.com/UA-46881978-1/boom?pixel)
+limitations under the License. ![Analytics](https://ga-beacon.appspot.com/UA-46881978-1/pla?pixel)
 
