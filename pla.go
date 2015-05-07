@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/rakyll/boom/boomer"
+	"github.com/sschepens/pla/boomer"
 )
 
 const (
@@ -55,7 +55,7 @@ var (
 	proxyAddr          = flag.String("x", "", "")
 )
 
-var usage = `Usage: boom [options...] <url>
+var usage = `Usage: pla [options...] <url>
 
 Options:
   -n  Number of requests to run.

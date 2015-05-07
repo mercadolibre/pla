@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rakyll/pb"
+	"github.com/sschepens/pb"
 )
 
 type result struct {
@@ -78,6 +78,7 @@ type Boomer struct {
 
 	bar     *pb.ProgressBar
 	results chan *result
+	stop    chan bool
 }
 
 func (b *Boomer) startProgress() {
@@ -86,6 +87,11 @@ func (b *Boomer) startProgress() {
 	}
 	b.bar = pb.New(b.N)
 	b.bar.Format("Bom !")
+	b.bar.BarStart = "Pl"
+	b.bar.BarEnd = "!"
+	b.bar.Empty = " "
+	b.bar.Current = "a"
+	b.bar.CurrentN = "a"
 	b.bar.Start()
 }
 
