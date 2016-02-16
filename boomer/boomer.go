@@ -119,6 +119,7 @@ func (b *Boomer) Run() {
 
 	go func() {
 		<-c
+		b.finalizeProgress()
 		close(b.stop)
 	}()
 
