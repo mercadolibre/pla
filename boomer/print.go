@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -41,39 +42,46 @@ type report struct {
 	sizeTotal      int64
 
 	output string
+
+	wg *sync.WaitGroup
 }
 
 func newReport(size int, results chan *result, output string, total time.Duration) *report {
-	return &report{
+	wg := &sync.WaitGroup{}
+	r := &report{
 		output:         output,
 		results:        results,
 		total:          total,
 		statusCodeDist: make(map[int]int),
 		errorDist:      make(map[string]int),
+		wg:             wg,
 	}
+	wg.Add(1)
+	go r.process()
+	return r
+}
+
+func (r *report) process() {
+	for res := range r.results {
+		if res.err != nil {
+			r.errorDist[res.err.Error()]++
+		} else {
+			r.lats = append(r.lats, res.duration.Seconds())
+			r.avgTotal += res.duration.Seconds()
+			r.statusCodeDist[res.statusCode]++
+			if res.contentLength > 0 {
+				r.sizeTotal += int64(res.contentLength)
+			}
+		}
+	}
+	r.wg.Done()
 }
 
 func (r *report) finalize() {
-	for {
-		select {
-		case res := <-r.results:
-			if res.err != nil {
-				r.errorDist[res.err.Error()]++
-			} else {
-				r.lats = append(r.lats, res.duration.Seconds())
-				r.avgTotal += res.duration.Seconds()
-				r.statusCodeDist[res.statusCode]++
-				if res.contentLength > 0 {
-					r.sizeTotal += int64(res.contentLength)
-				}
-			}
-		default:
-			r.rps = float64(len(r.lats)) / r.total.Seconds()
-			r.average = r.avgTotal / float64(len(r.lats))
-			r.print()
-			return
-		}
-	}
+	r.wg.Wait()
+	r.rps = float64(len(r.lats)) / r.total.Seconds()
+	r.average = r.avgTotal / float64(len(r.lats))
+	r.print()
 }
 
 func (r *report) print() {

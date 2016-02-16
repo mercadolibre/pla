@@ -27,6 +27,8 @@ import (
 	"github.com/sschepens/pb"
 )
 
+var client *fasthttp.Client
+
 type result struct {
 	err           error
 	statusCode    int
@@ -109,7 +111,7 @@ func (b *Boomer) incProgress() {
 // Run makes all the requests, prints the summary. It blocks until
 // all work is done.
 func (b *Boomer) Run() {
-	b.results = make(chan *result, b.N)
+	b.results = make(chan *result, b.C)
 	b.stop = make(chan struct{})
 	b.startProgress()
 
@@ -123,19 +125,14 @@ func (b *Boomer) Run() {
 		close(b.stop)
 	}()
 
+	r := newReport(b.N, b.results, b.Output, time.Now().Sub(start))
 	b.runWorkers()
 	b.finalizeProgress()
-	newReport(b.N, b.results, b.Output, time.Now().Sub(start)).finalize()
 	close(b.results)
+	r.finalize()
 }
 
 func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan *fasthttp.Request) {
-	client := &fasthttp.Client{
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: b.AllowInsecure,
-		},
-		MaxConnsPerHost: 65000,
-	}
 	resp := fasthttp.AcquireResponse()
 	for req := range ch {
 		s := time.Now()
@@ -164,6 +161,12 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan *fasthttp.Request) {
 }
 
 func (b *Boomer) runWorkers() {
+	client = &fasthttp.Client{
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: b.AllowInsecure,
+		},
+		MaxConnsPerHost: 65000,
+	}
 	var wg sync.WaitGroup
 	wg.Add(b.C)
 
