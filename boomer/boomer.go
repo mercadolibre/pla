@@ -143,6 +143,7 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan *fasthttp.Request) {
 		var code int
 		var size int
 
+		resp.Reset()
 		err := client.Do(req, resp)
 		if err == nil {
 			size = resp.Header.ContentLength()
@@ -156,7 +157,9 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan *fasthttp.Request) {
 			err:           err,
 			contentLength: size,
 		}
+		fasthttp.ReleaseRequest(req)
 	}
+	fasthttp.ReleaseResponse(resp)
 	wg.Done()
 }
 
