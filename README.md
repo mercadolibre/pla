@@ -11,7 +11,7 @@ it.
 
 Simple as it takes to type the following command:
 
-    go get github.com/sschepens/pla
+    go get -u github.com/sschepens/pla
 
 ## Usage
 
@@ -49,7 +49,7 @@ Options:
 This is what happens when you run Pla:
 
 	% pla -n 1000 -c 100 https://google.com
-	1000 / 1000 ∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎ 100.00 % 
+	1000 / 1000 ∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎ 100.00 %
 
 	Summary:
 	  Total:        21.1307 secs.
@@ -97,4 +97,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
