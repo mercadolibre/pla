@@ -15,7 +15,8 @@
 package boomer
 
 import (
-	"bytes"
+	"encoding/base64"
+	"github.com/valyala/fasthttp"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +34,9 @@ func TestN(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	defer server.Close()
 
-	req, _ := http.NewRequest("GET", server.URL, nil)
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(server.URL)
+	req.Header.SetMethod("GET")
 	boomer := &Boomer{
 		Request: req,
 		N:       20,
@@ -54,7 +57,9 @@ func TestQps(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	defer server.Close()
 
-	req, _ := http.NewRequest("GET", server.URL, nil)
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(server.URL)
+	req.Header.SetMethod("GET")
 	boomer := &Boomer{
 		Request: req,
 		N:       20,
@@ -84,12 +89,12 @@ func TestRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	defer server.Close()
 
-	header := make(http.Header)
-	header.Add("Content-type", "text/html")
-	header.Add("X-some", "value")
-	req, _ := http.NewRequest("GET", server.URL, nil)
-	req.Header = header
-	req.SetBasicAuth("username", "password")
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(server.URL)
+	req.Header.SetMethod("GET")
+	req.Header.Set("Content-Type", "text/html")
+	req.Header.Set("X-some", "value")
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("username:password")))
 	boomer := &Boomer{
 		Request: req,
 		N:       1,
@@ -106,7 +111,7 @@ func TestRequest(t *testing.T) {
 		t.Errorf("X-some header is expected to be value, %v is found", some)
 	}
 	if auth != "Basic dXNlcm5hbWU6cGFzc3dvcmQ=" {
-		t.Errorf("Basic authorization is not properly set")
+		t.Errorf("Basic authorization is not properly set: " + auth)
 	}
 }
 
@@ -121,7 +126,10 @@ func TestBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	defer server.Close()
 
-	req, _ := http.NewRequest("POST", server.URL, bytes.NewBuffer([]byte("Body")))
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(server.URL)
+	req.Header.SetMethod("POST")
+	req.SetBody([]byte("Body"))
 	boomer := &Boomer{
 		Request:     req,
 		RequestBody: "Body",

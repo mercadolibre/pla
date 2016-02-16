@@ -64,7 +64,7 @@ func (r *report) finalize() {
 				r.avgTotal += res.duration.Seconds()
 				r.statusCodeDist[res.statusCode]++
 				if res.contentLength > 0 {
-					r.sizeTotal += res.contentLength
+					r.sizeTotal += int64(res.contentLength)
 				}
 			}
 		default:

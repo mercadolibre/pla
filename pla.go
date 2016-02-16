@@ -17,14 +17,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	gourl "net/url"
 	"os"
 	"regexp"
 	"runtime"
 	"strings"
 
+	"encoding/base64"
 	"github.com/sschepens/pla/boomer"
+	"github.com/valyala/fasthttp"
 )
 
 const (
@@ -108,38 +109,10 @@ func main() {
 		// Username and password for basic auth
 		username, password string
 		// request headers
-		header http.Header = make(http.Header)
 	)
 
 	url = flag.Args()[0]
 	method = strings.ToUpper(*m)
-
-	// set content-type
-	header.Set("Content-Type", *contentType)
-	// set any other additional headers
-	if *headers != "" {
-		headers := strings.Split(*headers, ";")
-		for _, h := range headers {
-			match, err := parseInputWithRegexp(h, headerRegexp)
-			if err != nil {
-				usageAndExit(err.Error())
-			}
-			header.Set(match[1], match[2])
-		}
-	}
-
-	if *accept != "" {
-		header.Set("Accept", *accept)
-	}
-
-	// set basic auth if set
-	if *authHeader != "" {
-		match, err := parseInputWithRegexp(*authHeader, authRegexp)
-		if err != nil {
-			usageAndExit(err.Error())
-		}
-		username, password = match[1], match[2]
-	}
 
 	if *output != "csv" && *output != "" {
 		usageAndExit("Invalid output type; only csv is supported.")
@@ -154,13 +127,39 @@ func main() {
 		}
 	}
 
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		usageAndExit(err.Error())
-	}
-	req.Header = header
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(url)
+	req.Header.SetMethod(method)
+	req.SetBodyString(*body)
 	if username != "" || password != "" {
-		req.SetBasicAuth(username, password)
+		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
+	}
+
+	// set content-type
+	req.Header.Set("Content-Type", *contentType)
+	// set any other additional headers
+	if *headers != "" {
+		headers := strings.Split(*headers, ";")
+		for _, h := range headers {
+			match, err := parseInputWithRegexp(h, headerRegexp)
+			if err != nil {
+				usageAndExit(err.Error())
+			}
+			req.Header.Set(match[1], match[2])
+		}
+	}
+
+	if *accept != "" {
+		req.Header.Set("Accept", *accept)
+	}
+
+	// set basic auth if set
+	if *authHeader != "" {
+		match, err := parseInputWithRegexp(*authHeader, authRegexp)
+		if err != nil {
+			usageAndExit(err.Error())
+		}
+		username, password = match[1], match[2]
 	}
 
 	(&boomer.Boomer{
