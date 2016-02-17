@@ -34,6 +34,7 @@ type report struct {
 	rps      float64
 
 	results chan *result
+	start   time.Time
 	total   time.Duration
 
 	errorDist      map[string]int
@@ -46,12 +47,12 @@ type report struct {
 	wg *sync.WaitGroup
 }
 
-func newReport(size int, results chan *result, output string, total time.Duration) *report {
+func newReport(size int, results chan *result, output string) *report {
 	wg := &sync.WaitGroup{}
 	r := &report{
 		output:         output,
 		results:        results,
-		total:          total,
+		start:          time.Now(),
 		statusCodeDist: make(map[int]int),
 		errorDist:      make(map[string]int),
 		wg:             wg,
@@ -79,6 +80,7 @@ func (r *report) process() {
 
 func (r *report) finalize() {
 	r.wg.Wait()
+	r.total = time.Now().Sub(r.start)
 	r.rps = float64(len(r.lats)) / r.total.Seconds()
 	r.average = r.avgTotal / float64(len(r.lats))
 	r.print()

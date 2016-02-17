@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"encoding/base64"
 	"github.com/sschepens/pla/boomer"
@@ -153,6 +154,14 @@ func main() {
 		req.Header.Set("Accept", *accept)
 	}
 
+	if !*disableCompression {
+		req.Header.Set("Accept-Encoding", "gzip,deflate")
+	}
+
+	if *disableKeepAlives {
+		req.SetConnectionClose()
+	}
+
 	// set basic auth if set
 	if *authHeader != "" {
 		match, err := parseInputWithRegexp(*authHeader, authRegexp)
@@ -163,18 +172,15 @@ func main() {
 	}
 
 	(&boomer.Boomer{
-		Request:            req,
-		RequestBody:        *body,
-		N:                  num,
-		C:                  conc,
-		Qps:                q,
-		Timeout:            *t,
-		AllowInsecure:      *insecure,
-		DisableCompression: *disableCompression,
-		DisableKeepAlives:  *disableKeepAlives,
-		ProxyAddr:          proxyURL,
-		Output:             *output,
-		ReadAll:            *readAll,
+		Request:       req,
+		N:             num,
+		C:             conc,
+		Qps:           q,
+		Timeout:       time.Duration(*t) * time.Millisecond,
+		AllowInsecure: *insecure,
+		ProxyAddr:     proxyURL,
+		Output:        *output,
+		ReadAll:       *readAll,
 	}).Run()
 }
 

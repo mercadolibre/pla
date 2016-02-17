@@ -131,10 +131,9 @@ func TestBody(t *testing.T) {
 	req.Header.SetMethod("POST")
 	req.SetBody([]byte("Body"))
 	boomer := &Boomer{
-		Request:     req,
-		RequestBody: "Body",
-		N:           10,
-		C:           1,
+		Request: req,
+		N:       10,
+		C:       1,
 	}
 	boomer.Run()
 	if count != 10 {

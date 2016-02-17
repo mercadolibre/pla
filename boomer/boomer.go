@@ -40,8 +40,6 @@ type Boomer struct {
 	// Request is the request to be made.
 	Request *fasthttp.Request
 
-	RequestBody string
-
 	// N is the total number of requests to make.
 	N int
 
@@ -49,19 +47,13 @@ type Boomer struct {
 	C int
 
 	// Timeout in seconds.
-	Timeout int
+	Timeout time.Duration
 
 	// Qps is the rate limit.
 	Qps int
 
 	// AllowInsecure is an option to allow insecure TLS/SSL certificates.
 	AllowInsecure bool
-
-	// DisableCompression is an option to disable compression in response
-	DisableCompression bool
-
-	// DisableKeepAlives is an option to prevents re-use of TCP connections between different HTTP requests
-	DisableKeepAlives bool
 
 	// Output represents the output type. If "csv" is provided, the
 	// output will be dumped as a csv stream.
@@ -115,7 +107,6 @@ func (b *Boomer) Run() {
 	b.stop = make(chan struct{})
 	b.startProgress()
 
-	start := time.Now()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
@@ -125,26 +116,37 @@ func (b *Boomer) Run() {
 		close(b.stop)
 	}()
 
-	r := newReport(b.N, b.results, b.Output, time.Now().Sub(start))
+	r := newReport(b.N, b.results, b.Output)
 	b.runWorkers()
-	b.finalizeProgress()
 	close(b.results)
+	b.finalizeProgress()
 	r.finalize()
 }
 
-func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan *fasthttp.Request) {
+func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan struct{}) {
 	resp := fasthttp.AcquireResponse()
-	for req := range ch {
+	req := fasthttp.AcquireRequest()
+	b.Request.CopyTo(req)
+	for range ch {
 		s := time.Now()
 
 		var code int
 		var size int
 
 		resp.Reset()
-		err := client.Do(req, resp)
+		var err error
+		if b.Timeout > 0 {
+			err = client.DoTimeout(req, resp, b.Timeout)
+		} else {
+			err = client.Do(req, resp)
+		}
 		if err == nil {
 			size = resp.Header.ContentLength()
 			code = resp.Header.StatusCode()
+		}
+
+		if b.ReadAll {
+			resp.Body()
 		}
 
 		b.incProgress()
@@ -154,9 +156,9 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan *fasthttp.Request) {
 			err:           err,
 			contentLength: size,
 		}
-		fasthttp.ReleaseRequest(req)
 	}
 	fasthttp.ReleaseResponse(resp)
+	fasthttp.ReleaseRequest(req)
 	wg.Done()
 }
 
@@ -175,7 +177,7 @@ func (b *Boomer) runWorkers() {
 		throttle = time.Tick(time.Duration(1e6/(b.Qps)) * time.Microsecond)
 	}
 
-	jobsch := make(chan *fasthttp.Request, b.C)
+	jobsch := make(chan struct{}, b.C)
 	for i := 0; i < b.C; i++ {
 		go b.runWorker(&wg, jobsch)
 	}
@@ -188,7 +190,7 @@ Loop:
 		select {
 		case <-b.stop:
 			break Loop
-		case jobsch <- cloneRequest(b.Request):
+		case jobsch <- struct{}{}:
 			continue
 		}
 	}
