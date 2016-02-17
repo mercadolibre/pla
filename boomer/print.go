@@ -16,7 +16,7 @@ package boomer
 
 import (
 	"fmt"
-	"sort"
+	"github.com/sschepens/gohistogram"
 	"strings"
 	"sync"
 	"time"
@@ -39,12 +39,12 @@ type report struct {
 
 	errorDist      map[string]int
 	statusCodeDist map[int]int
-	lats           []float64
 	sizeTotal      int64
 
 	output string
 
-	wg *sync.WaitGroup
+	wg    *sync.WaitGroup
+	histo *gohistogram.NumericHistogram
 }
 
 func newReport(size int, results chan *result, output string) *report {
@@ -56,6 +56,7 @@ func newReport(size int, results chan *result, output string) *report {
 		statusCodeDist: make(map[int]int),
 		errorDist:      make(map[string]int),
 		wg:             wg,
+		histo:          gohistogram.NewHistogram(10),
 	}
 	wg.Add(1)
 	go r.process()
@@ -67,7 +68,14 @@ func (r *report) process() {
 		if res.err != nil {
 			r.errorDist[res.err.Error()]++
 		} else {
-			r.lats = append(r.lats, res.duration.Seconds())
+			sec := res.duration.Seconds()
+			if r.slowest == 0 || sec > r.slowest {
+				r.slowest = sec
+			}
+			if r.fastest == 0 || r.fastest > sec {
+				r.fastest = sec
+			}
+			r.histo.Add(res.duration.Seconds())
 			r.avgTotal += res.duration.Seconds()
 			r.statusCodeDist[res.statusCode]++
 			if res.contentLength > 0 {
@@ -81,22 +89,19 @@ func (r *report) process() {
 func (r *report) finalize() {
 	r.wg.Wait()
 	r.total = time.Now().Sub(r.start)
-	r.rps = float64(len(r.lats)) / r.total.Seconds()
-	r.average = r.avgTotal / float64(len(r.lats))
+	count := float64(r.histo.Count())
+	r.rps = count / r.total.Seconds()
+	r.average = r.avgTotal / count
 	r.print()
 }
 
 func (r *report) print() {
-	sort.Float64s(r.lats)
-
 	if r.output == "csv" {
 		r.printCSV()
 		return
 	}
 
-	if len(r.lats) > 0 {
-		r.fastest = r.lats[0]
-		r.slowest = r.lats[len(r.lats)-1]
+	if r.histo.Count() > 0 {
 		fmt.Printf("\nSummary:\n")
 		fmt.Printf("  Total:\t%4.4f secs.\n", r.total.Seconds())
 		fmt.Printf("  Slowest:\t%4.4f secs.\n", r.slowest)
@@ -105,7 +110,7 @@ func (r *report) print() {
 		fmt.Printf("  Requests/sec:\t%4.4f\n", r.rps)
 		if r.sizeTotal > 0 {
 			fmt.Printf("  Total Data Received:\t%d bytes.\n", r.sizeTotal)
-			fmt.Printf("  Response Size per Request:\t%d bytes.\n", r.sizeTotal/int64(len(r.lats)))
+			fmt.Printf("  Response Size per Request:\t%d bytes.\n", r.sizeTotal/int64(r.histo.Count()))
 		}
 		r.printStatusCodes()
 		r.printHistogram()
@@ -118,61 +123,40 @@ func (r *report) print() {
 }
 
 func (r *report) printCSV() {
-	for i, val := range r.lats {
-		fmt.Printf("%v,%4.4f\n", i+1, val)
-	}
+	//for i, val := range r.lats {
+	//	fmt.Printf("%v,%4.4f\n", i+1, val)
+	//}
 }
 
 // Prints percentile latencies.
 func (r *report) printLatencies() {
 	pctls := []int{10, 25, 50, 75, 90, 95, 99}
-	data := make([]float64, len(pctls))
-	j := 0
-	for i := 0; i < len(r.lats) && j < len(pctls); i++ {
-		current := i * 100 / len(r.lats)
-		if current >= pctls[j] {
-			data[j] = r.lats[i]
-			j++
-		}
-	}
 	fmt.Printf("\nLatency distribution:\n")
-	for i := 0; i < len(pctls); i++ {
-		if data[i] > 0 {
-			fmt.Printf("  %v%% in %4.4f secs.\n", pctls[i], data[i])
+	cent := float64(100)
+	for _, p := range pctls {
+		q := r.histo.Quantile(float64(p) / cent)
+		if q > 0 {
+			fmt.Printf("  %v%% in %4.4f secs.\n", p, q)
 		}
 	}
 }
 
 func (r *report) printHistogram() {
-	bc := 10
-	buckets := make([]float64, bc+1)
-	counts := make([]int, bc+1)
-	bs := (r.slowest - r.fastest) / float64(bc)
-	for i := 0; i < bc; i++ {
-		buckets[i] = r.fastest + bs*float64(i)
-	}
-	buckets[bc] = r.slowest
-	var bi int
-	var max int
-	for i := 0; i < len(r.lats); {
-		if r.lats[i] <= buckets[bi] {
-			i++
-			counts[bi]++
-			if max < counts[bi] {
-				max = counts[bi]
-			}
-		} else if bi < len(buckets)-1 {
-			bi++
-		}
-	}
 	fmt.Printf("\nResponse time histogram:\n")
-	for i := 0; i < len(buckets); i++ {
-		// Normalize bar lengths.
-		var barLen int
-		if max > 0 {
-			barLen = counts[i] * 40 / max
+	bins := r.histo.Bins()
+	max := bins[0].Count
+	for i := 1; i < len(bins); i++ {
+		if bins[i].Count > max {
+			max = bins[i].Count
 		}
-		fmt.Printf("  %4.3f [%v]\t|%v\n", buckets[i], counts[i], strings.Repeat(barChar, barLen))
+	}
+	for i := 0; i < len(bins); i++ {
+		// Normalize bar lengths.
+		var barLen uint64
+		if max > 0 {
+			barLen = bins[i].Count * 40 / max
+		}
+		fmt.Printf("  %4.3f [%v]\t|%v\n", bins[i].Value, bins[i].Count, strings.Repeat(barChar, int(barLen)))
 	}
 }
 
