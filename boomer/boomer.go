@@ -167,7 +167,7 @@ func (b *Boomer) runWorkers() {
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: b.AllowInsecure,
 		},
-		MaxConnsPerHost: 65000,
+		MaxConnsPerHost: b.C * 2,
 	}
 	var wg sync.WaitGroup
 	wg.Add(b.C)
