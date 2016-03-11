@@ -114,6 +114,8 @@ func (b *Boomer) Run() {
 	go func() {
 		<-c
 		shutdownTimer = time.AfterFunc(10*time.Second, func() {
+			b.finalizeProgress()
+			close(b.stop)
 			os.Exit(1)
 		})
 		b.finalizeProgress()
