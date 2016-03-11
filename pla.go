@@ -34,7 +34,19 @@ const (
 	authRegexp   = `^(.+):([^\s].+)`
 )
 
+type stringSlice []string
+
+func (s *stringSlice) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
+func (s *stringSlice) String() string {
+	return strings.Join(*s, ",")
+}
+
 var (
+	headerList  stringSlice
 	m           = flag.String("m", "GET", "")
 	headers     = flag.String("h", "", "")
 	body        = flag.String("d", "", "")
@@ -69,6 +81,7 @@ Options:
       metrics in comma-seperated values format.
 
   -m  HTTP method, one of GET, POST, PUT, DELETE, HEAD, OPTIONS.
+  -H  Add custom HTTP header, name1:value1. Can be repeated for more headers.
   -h  Custom HTTP headers, name1:value1;name2:value2.
   -t  Timeout in ms.
   -A  HTTP Accept header.
@@ -87,6 +100,7 @@ Options:
 `
 
 func main() {
+	flag.Var(&headerList, "H", "")
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, fmt.Sprintf(usage, runtime.NumCPU()))
 	}
@@ -148,6 +162,13 @@ func main() {
 			}
 			req.Header.Set(match[1], match[2])
 		}
+	}
+	for _, h := range headerList {
+		match, err := parseInputWithRegexp(h, headerRegexp)
+		if err != nil {
+			usageAndExit(err.Error())
+		}
+		req.Header.Set(match[1], match[2])
 	}
 
 	if *accept != "" {
