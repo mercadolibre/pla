@@ -103,6 +103,7 @@ func (b *Boomer) incProgress() {
 // Run makes all the requests, prints the summary. It blocks until
 // all work is done.
 func (b *Boomer) Run() {
+	var shutdownTimer *time.Timer
 	b.results = make(chan *result, b.C)
 	b.stop = make(chan struct{})
 	b.startProgress()
@@ -112,12 +113,18 @@ func (b *Boomer) Run() {
 
 	go func() {
 		<-c
+		shutdownTimer = time.AfterFunc(10*time.Second, func() {
+			os.Exit(1)
+		})
 		b.finalizeProgress()
 		close(b.stop)
 	}()
 
 	r := newReport(b.N, b.results, b.Output)
 	b.runWorkers()
+	if shutdownTimer != nil {
+		shutdownTimer.Stop()
+	}
 	close(b.results)
 	b.finalizeProgress()
 	r.finalize()
