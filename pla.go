@@ -63,7 +63,6 @@ var (
 	t    = flag.Int("t", 0, "")
 	cpus = flag.Int("cpus", runtime.GOMAXPROCS(-1), "")
 
-	insecure           = flag.Bool("allow-insecure", false, "")
 	disableCompression = flag.Bool("disable-compression", false, "")
 	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
 	proxyAddr          = flag.String("x", "", "")
@@ -91,7 +90,6 @@ Options:
   -x  HTTP Proxy address as host:port.
 
   -readall              Consumes the entire request body.
-  -allow-insecure       Allow bad/expired TLS/SSL certificates.
   -disable-compression  Disable compression.
   -disable-keepalive    Disable keep-alive, prevents re-use of TCP
                         connections between different HTTP requests.
@@ -193,15 +191,14 @@ func main() {
 	}
 
 	(&boomer.Boomer{
-		Request:       req,
-		N:             num,
-		C:             conc,
-		Qps:           q,
-		Timeout:       time.Duration(*t) * time.Millisecond,
-		AllowInsecure: *insecure,
-		ProxyAddr:     proxyURL,
-		Output:        *output,
-		ReadAll:       *readAll,
+		Request:   req,
+		N:         num,
+		C:         conc,
+		QPS:       q,
+		Timeout:   time.Duration(*t) * time.Millisecond,
+		ProxyAddr: proxyURL,
+		Output:    *output,
+		ReadAll:   *readAll,
 	}).Run()
 }
 

@@ -49,11 +49,8 @@ type Boomer struct {
 	// Timeout in seconds.
 	Timeout time.Duration
 
-	// Qps is the rate limit.
-	Qps int
-
-	// AllowInsecure is an option to allow insecure TLS/SSL certificates.
-	AllowInsecure bool
+	// QPS is the rate limit.
+	QPS int
 
 	// Output represents the output type. If "csv" is provided, the
 	// output will be dumped as a csv stream.
@@ -174,7 +171,7 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan struct{}) {
 func (b *Boomer) runWorkers() {
 	client = &fasthttp.Client{
 		TLSConfig: &tls.Config{
-			InsecureSkipVerify: b.AllowInsecure,
+			InsecureSkipVerify: true,
 		},
 		MaxConnsPerHost: b.C * 2,
 	}
@@ -182,8 +179,8 @@ func (b *Boomer) runWorkers() {
 	wg.Add(b.C)
 
 	var throttle <-chan time.Time
-	if b.Qps > 0 {
-		throttle = time.Tick(time.Duration(1e6/(b.Qps)) * time.Microsecond)
+	if b.QPS > 0 {
+		throttle = time.Tick(time.Duration(1e6/(b.QPS)) * time.Microsecond)
 	}
 
 	jobsch := make(chan struct{}, b.C)
@@ -193,7 +190,7 @@ func (b *Boomer) runWorkers() {
 
 Loop:
 	for i := 0; i < b.N; i++ {
-		if b.Qps > 0 {
+		if b.QPS > 0 {
 			<-throttle
 		}
 		select {
