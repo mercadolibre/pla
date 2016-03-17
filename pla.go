@@ -61,6 +61,7 @@ var (
 	n    = flag.Int("n", 200, "")
 	q    = flag.Int("q", 0, "")
 	t    = flag.Int("t", 0, "")
+	duration = flag.Int("l", 0, "")
 	cpus = flag.Int("cpus", runtime.GOMAXPROCS(-1), "")
 
 	disableCompression = flag.Bool("disable-compression", false, "")
@@ -85,6 +86,7 @@ Options:
   -t  Timeout in ms.
   -A  HTTP Accept header.
   -d  HTTP request body.
+	-l  Length or duration of test in minutes, invalidates number of requests.
   -T  Content-type, defaults to "text/html".
   -a  Basic authentication, username:password.
   -x  HTTP Proxy address as host:port.
@@ -115,6 +117,10 @@ func main() {
 
 	if num <= 0 || conc <= 0 {
 		usageAndExit("n and c cannot be smaller than 1.")
+	}
+
+	if *duration < 0 {
+		usageAndExit("duration cannot be negative.")
 	}
 
 	var (
@@ -191,14 +197,15 @@ func main() {
 	}
 
 	(&boomer.Boomer{
-		Request:   req,
-		N:         num,
-		C:         conc,
-		QPS:       q,
-		Timeout:   time.Duration(*t) * time.Millisecond,
-		ProxyAddr: proxyURL,
-		Output:    *output,
-		ReadAll:   *readAll,
+		Request:       req,
+		N:             num,
+		C:             conc,
+		Duration:      time.Duration(*duration) * time.Minute,
+		QPS:           q,
+		Timeout:       time.Duration(*t) * time.Millisecond,
+		ProxyAddr:     proxyURL,
+		Output:        *output,
+		ReadAll:       *readAll,
 	}).Run()
 }
 

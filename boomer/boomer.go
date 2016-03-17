@@ -46,6 +46,9 @@ type Boomer struct {
 	// C is the concurrency level, the number of concurrent workers to run.
 	C int
 
+	// Duration is the amount of time the test should run.
+	Duration time.Duration
+
 	// Timeout in seconds.
 	Timeout time.Duration
 
@@ -73,7 +76,11 @@ func (b *Boomer) startProgress() {
 	if b.Output != "" {
 		return
 	}
-	b.bar = pb.New(b.N)
+	total := b.N
+	if b.Duration > 0 {
+		total = 100
+	}
+	b.bar = pb.New(total)
 	b.bar.Format("Bom !")
 	b.bar.BarStart = "Pl"
 	b.bar.BarEnd = "!"
@@ -97,6 +104,17 @@ func (b *Boomer) incProgress() {
 	b.bar.Increment()
 }
 
+func (b *Boomer) stopProgress() *time.Timer {
+		shutdownTimer := time.AfterFunc(10*time.Second, func() {
+			b.finalizeProgress()
+			close(b.stop)
+			os.Exit(1)
+		})
+		b.finalizeProgress()
+		close(b.stop)
+		return shutdownTimer
+}
+
 // Run makes all the requests, prints the summary. It blocks until
 // all work is done.
 func (b *Boomer) Run() {
@@ -110,16 +128,21 @@ func (b *Boomer) Run() {
 
 	go func() {
 		<-c
-		shutdownTimer = time.AfterFunc(10*time.Second, func() {
-			b.finalizeProgress()
-			close(b.stop)
-			os.Exit(1)
-		})
-		b.finalizeProgress()
-		close(b.stop)
+		shutdownTimer = b.stopProgress()
 	}()
 
 	r := newReport(b.N, b.results, b.Output)
+	if b.Duration > 0 {
+		ticker := time.NewTicker(b.Duration / 100)
+		go func () {
+			for range ticker.C {
+				b.incProgress()
+			}
+		}()
+		time.AfterFunc(b.Duration, func() {
+			shutdownTimer = b.stopProgress()
+		})
+	}
 	b.runWorkers()
 	if shutdownTimer != nil {
 		shutdownTimer.Stop()
@@ -155,7 +178,9 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan struct{}) {
 			resp.Body()
 		}
 
-		b.incProgress()
+    if b.Duration == 0 {
+			b.incProgress()
+		}
 		b.results <- &result{
 			statusCode:    code,
 			duration:      time.Now().Sub(s),
@@ -188,8 +213,12 @@ func (b *Boomer) runWorkers() {
 		go b.runWorker(&wg, jobsch)
 	}
 
+	i := 0
 Loop:
-	for i := 0; i < b.N; i++ {
+	for {
+		if i >= b.N {
+			break Loop
+		}
 		if b.QPS > 0 {
 			<-throttle
 		}
@@ -197,17 +226,12 @@ Loop:
 		case <-b.stop:
 			break Loop
 		case jobsch <- struct{}{}:
+			if b.Duration == 0 {
+				i++
+			}
 			continue
 		}
 	}
 	close(jobsch)
 	wg.Wait()
-}
-
-// cloneRequest returns a clone of the provided *http.Request.
-// The clone is a shallow copy of the struct and its Header map.
-func cloneRequest(r *fasthttp.Request) *fasthttp.Request {
-	req := fasthttp.AcquireRequest()
-	r.CopyTo(req)
-	return req
 }
