@@ -148,6 +148,13 @@ func main() {
 
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(url)
+	req.URI().Update(url)
+	if len(req.URI().Host()) == 0 {
+			req.URI().Update("http://" + url)
+			if len(req.URI().Host()) == 0 {
+				usageAndExit("invalid url ''" + req.URI().String() + "'', unable to detect host")
+			}
+	}
 	req.Header.SetMethod(method)
 	req.SetBodyString(*body)
 	if username != "" || password != "" {
