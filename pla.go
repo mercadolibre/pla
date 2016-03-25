@@ -79,19 +79,15 @@ func main() {
 		usageAndExit(err.Error())
 	}
 
-	num := *n
-	conc := *c
-	q := *q
-
-	if *duration <= 0 && num <= 0 {
+	if *duration <= 0 && *n <= 0 {
 		usageAndExit("length or amount must be specified")
 	}
 
-	if conc <= 0 {
+	if *c <= 0 {
 		usageAndExit("cconcurrency cannot be smaller than 1.")
 	}
 
-	if num > 0 && conc > num {
+	if *n > 0 && *c > *n {
 		usageAndExit("concurrency cannot be greater than amount")
 	}
 
@@ -144,13 +140,13 @@ func main() {
 	}
 
 	reporter = reports.NewStaticReport()
-	progressBar = newProgressBar(num, *duration)
+	progressBar = newProgressBar()
 	boomerInstance = boomer.NewBoomer(req).
-		WithAmount(num).
-		WithConcurrency(conc).
+		WithAmount(*n).
+		WithConcurrency(*c).
 		WithDuration(*duration).
 		WithTimeout(*timeout).
-		WithRateLimit(q, time.Second)
+		WithRateLimit(*q, time.Second)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -186,17 +182,17 @@ func parseInputWithRegexp(input, regx string) ([]string, error) {
 	return matches, nil
 }
 
-func newProgressBar(total uint, duration time.Duration) *pb.ProgressBar {
-	if duration > 0 {
+func newProgressBar() *pb.ProgressBar {
+	if *duration > 0 {
 		progressBar = pb.New(100)
-		ticker := time.NewTicker(duration / 100)
+		ticker := time.NewTicker(*duration / 100)
 		go func() {
 			for range ticker.C {
 				progressBar.Increment()
 			}
 		}()
 	} else {
-		progressBar = pb.New(int(total))
+		progressBar = pb.New(int(*n))
 	}
 	progressBar.BarStart = "Pl"
 	progressBar.BarEnd = "!"
