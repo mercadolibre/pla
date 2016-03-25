@@ -36,17 +36,6 @@ const (
 	authRegexp   = `^(.+):([^\s].+)`
 )
 
-type stringSlice []string
-
-func (s *stringSlice) Set(value string) error {
-	*s = append(*s, value)
-	return nil
-}
-
-func (s *stringSlice) String() string {
-	return strings.Join(*s, ",")
-}
-
 var (
 	app      = kingpin.New("pla", "Tiny and powerful HTTP load generator.")
 	n        = app.Flag("amount", "Number of requests to run.").Short('n').Default("0").Uint()
@@ -118,6 +107,7 @@ func main() {
 	}
 	req.Header.SetMethod(method)
 	req.SetBodyString(*body)
+	req.Header.SetContentLength(len(req.Body()))
 	if username != "" || password != "" {
 		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
 	}
