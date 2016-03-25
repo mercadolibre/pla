@@ -16,7 +16,6 @@ package boomer
 
 import (
 	"encoding/base64"
-	"github.com/valyala/fasthttp"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +23,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 func TestN(t *testing.T) {
@@ -37,14 +38,17 @@ func TestN(t *testing.T) {
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(server.URL)
 	req.Header.SetMethod("GET")
-	boomer := &Boomer{
-		Request: req,
-		N:       20,
-		C:       2,
-	}
+	boomer := NewBoomer(req).
+		WithAmount(20).
+		WithConcurrency(2)
+	go func() {
+		for range boomer.Results() {
+		}
+	}()
 	boomer.Run()
-	if count != 20 {
-		t.Errorf("Expected to boom 20 times, found %v", count)
+	boomer.Wait()
+	if atomic.LoadInt64(&count) != 20 {
+		t.Errorf("Expected to boom 20 times, found %d", atomic.LoadInt64(&count))
 	}
 }
 
@@ -60,21 +64,25 @@ func TestQPS(t *testing.T) {
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(server.URL)
 	req.Header.SetMethod("GET")
-	boomer := &Boomer{
-		Request: req,
-		N:       20,
-		C:       2,
-		QPS:     1,
-	}
+	boomer := NewBoomer(req).
+		WithAmount(20).
+		WithConcurrency(2).
+		WithRateLimit(1, time.Second)
+	go func() {
+		for range boomer.Results() {
+		}
+	}()
 	wg.Add(1)
 	time.AfterFunc(time.Second, func() {
-		if count > 1 {
-			t.Errorf("Expected to boom 1 times, found %v", count)
+		if atomic.LoadInt64(&count) > 1 {
+			t.Errorf("Expected to boom 1 times, found %d", atomic.LoadInt64(&count))
 		}
 		wg.Done()
 	})
-	go boomer.Run()
+	boomer.Run()
 	wg.Wait()
+	boomer.Stop()
+	boomer.Wait()
 }
 
 func TestRequest(t *testing.T) {
@@ -95,12 +103,15 @@ func TestRequest(t *testing.T) {
 	req.Header.Set("Content-Type", "text/html")
 	req.Header.Set("X-some", "value")
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("username:password")))
-	boomer := &Boomer{
-		Request: req,
-		N:       1,
-		C:       1,
-	}
+	boomer := NewBoomer(req).
+		WithAmount(1).
+		WithConcurrency(1)
+	go func() {
+		for range boomer.Results() {
+		}
+	}()
 	boomer.Run()
+	boomer.Wait()
 	if uri != "/" {
 		t.Errorf("Uri is expected to be /, %v is found", uri)
 	}
@@ -130,13 +141,16 @@ func TestBody(t *testing.T) {
 	req.SetRequestURI(server.URL)
 	req.Header.SetMethod("POST")
 	req.SetBody([]byte("Body"))
-	boomer := &Boomer{
-		Request: req,
-		N:       10,
-		C:       1,
-	}
+	boomer := NewBoomer(req).
+		WithAmount(10).
+		WithConcurrency(1)
+	go func() {
+		for range boomer.Results() {
+		}
+	}()
 	boomer.Run()
-	if count != 10 {
-		t.Errorf("Expected to boom 10 times, found %v", count)
+	boomer.Wait()
+	if atomic.LoadInt64(&count) != 10 {
+		t.Errorf("Expected to boom 10 times, found %d", atomic.LoadInt64(&count))
 	}
 }
