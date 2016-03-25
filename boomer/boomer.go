@@ -100,7 +100,7 @@ func (b *Boomer) WithDuration(d time.Duration) *Boomer {
 
 func (b *Boomer) WithRateLimit(n uint, rate time.Duration) *Boomer {
 	if n > 0 {
-		b.bucket, _ = memory.New().Create("pla", n, rate)
+		b.bucket, _ = memory.New().Create("pla", n-1, rate)
 	}
 	return b
 }
@@ -220,12 +220,10 @@ func (b *Boomer) triggerLoop() {
 		select {
 		case <-b.stop:
 			return
-		default:
+		case b.jobs <- b.Request:
+			i++
 			err := b.checkRateLimit()
-			if err == nil {
-				b.jobs <- b.Request
-				i++
-			} else {
+			if err != nil {
 				time.Sleep(b.bucket.Reset().Sub(time.Now()))
 			}
 		}
