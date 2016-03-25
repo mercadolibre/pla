@@ -17,152 +17,162 @@ package boomer
 
 import (
 	"crypto/tls"
-	"github.com/valyala/fasthttp"
-	"net/url"
-	"os"
-	"os/signal"
+	"math"
 	"sync"
 	"time"
 
-	"github.com/sschepens/pb"
+	"github.com/Clever/leakybucket"
+	"github.com/Clever/leakybucket/memory"
+	"github.com/valyala/fasthttp"
 )
 
-var client *fasthttp.Client
+var client = &fasthttp.Client{
+	TLSConfig: &tls.Config{
+		InsecureSkipVerify: true,
+	},
+	MaxConnsPerHost: math.MaxInt32,
+}
 
-type result struct {
-	err           error
-	statusCode    int
-	duration      time.Duration
-	contentLength int
+type Result struct {
+	Err           error
+	StatusCode    int
+	Duration      time.Duration
+	ContentLength int
 }
 
 type Boomer struct {
 	// Request is the request to be made.
 	Request *fasthttp.Request
 
-	// N is the total number of requests to make.
-	N int
+	// Timeout in seconds.
+	Timeout time.Duration
 
 	// C is the concurrency level, the number of concurrent workers to run.
-	C int
+	C uint
+
+	// N is the total number of requests to make.
+	N uint
 
 	// Duration is the amount of time the test should run.
 	Duration time.Duration
 
-	// Timeout in seconds.
-	Timeout time.Duration
-
-	// QPS is the rate limit.
-	QPS int
-
-	// Output represents the output type. If "csv" is provided, the
-	// output will be dumped as a csv stream.
-	Output string
-
-	// ProxyAddr is the address of HTTP proxy server in the format on "host:port".
-	// Optional.
-	ProxyAddr *url.URL
-
-	// ReadAll determines whether the body of the response needs
-	// to be fully consumed.
-	ReadAll bool
-
-	bar     *pb.ProgressBar
-	results chan *result
+	bucket  leakybucket.Bucket
+	results chan Result
 	stop    chan struct{}
+	jobs    chan *fasthttp.Request
+	running bool
+	wg      *sync.WaitGroup
 }
 
-func (b *Boomer) startProgress() {
-	if b.Output != "" {
+func NewBoomer(req *fasthttp.Request) *Boomer {
+	return &Boomer{
+		Request: req,
+		results: make(chan Result),
+		stop:    make(chan struct{}),
+		jobs:    make(chan *fasthttp.Request),
+		wg:      &sync.WaitGroup{},
+	}
+}
+
+func (b *Boomer) WithTimeout(t time.Duration) *Boomer {
+	b.Timeout = t
+	return b
+}
+
+func (b *Boomer) WithAmount(n uint) *Boomer {
+	if n > 0 {
+		b.Duration = 0
+	}
+	b.N = n
+	return b
+}
+
+func (b *Boomer) WithDuration(d time.Duration) *Boomer {
+	if b.running {
+		panic("Cannot modify boomer while running")
+	}
+	if d > 0 {
+		b.N = 0
+	}
+	b.Duration = d
+	return b
+}
+
+func (b *Boomer) WithRateLimit(n uint, rate time.Duration) *Boomer {
+	if n > 0 {
+		b.bucket, _ = memory.New().Create("pla", n, rate)
+	}
+	return b
+}
+
+func (b *Boomer) WithConcurrency(c uint) *Boomer {
+	if b.running {
+		panic("Cannot modify boomer while running")
+	}
+	b.C = c
+	b.results = make(chan Result, c)
+	return b
+}
+
+// Results returns receive-only channel of results
+func (b *Boomer) Results() <-chan Result {
+	return b.results
+}
+
+// Stop indicates Boomer to stop processing new requests
+func (b *Boomer) Stop() {
+	if !b.running {
 		return
 	}
-	total := b.N
-	if b.Duration > 0 {
-		total = 100
-	}
-	b.bar = pb.New(total)
-	b.bar.Format("Bom !")
-	b.bar.BarStart = "Pl"
-	b.bar.BarEnd = "!"
-	b.bar.Empty = " "
-	b.bar.Current = "a"
-	b.bar.CurrentN = "a"
-	b.bar.Start()
+	b.running = false
+	close(b.stop)
 }
 
-func (b *Boomer) finalizeProgress() {
-	if b.Output != "" {
-		return
-	}
-	b.bar.Finish()
-}
-
-func (b *Boomer) incProgress() {
-	if b.Output != "" {
-		return
-	}
-	b.bar.Increment()
-}
-
-func (b *Boomer) stopProgress() *time.Timer {
-		shutdownTimer := time.AfterFunc(10*time.Second, func() {
-			b.finalizeProgress()
-			close(b.stop)
-			os.Exit(1)
-		})
-		b.finalizeProgress()
-		close(b.stop)
-		return shutdownTimer
+// Wait blocks until Boomer successfully finished or is fully stopped
+func (b *Boomer) Wait() {
+	b.wg.Wait()
+	close(b.results)
 }
 
 // Run makes all the requests, prints the summary. It blocks until
 // all work is done.
 func (b *Boomer) Run() {
-	var shutdownTimer *time.Timer
-	b.results = make(chan *result, b.C)
-	b.stop = make(chan struct{})
-	b.startProgress()
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	go func() {
-		<-c
-		shutdownTimer = b.stopProgress()
-	}()
-
-	r := newReport(b.N, b.results, b.Output)
+	if b.running {
+		return
+	}
+	b.running = true
 	if b.Duration > 0 {
-		ticker := time.NewTicker(b.Duration / 100)
-		go func () {
-			for range ticker.C {
-				b.incProgress()
-			}
-		}()
 		time.AfterFunc(b.Duration, func() {
-			shutdownTimer = b.stopProgress()
+			b.Stop()
 		})
 	}
 	b.runWorkers()
-	if shutdownTimer != nil {
-		shutdownTimer.Stop()
-	}
-	close(b.results)
-	b.finalizeProgress()
-	r.finalize()
 }
 
-func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan struct{}) {
+func (b *Boomer) runWorkers() {
+	b.wg.Add(int(b.C))
+
+	var i uint
+	for i = 0; i < b.C; i++ {
+		go b.runWorker()
+	}
+
+	b.wg.Add(1)
+	go b.triggerLoop()
+}
+
+func (b *Boomer) runWorker() {
 	resp := fasthttp.AcquireResponse()
 	req := fasthttp.AcquireRequest()
-	b.Request.CopyTo(req)
-	for range ch {
+	for r := range b.jobs {
+		req.Reset()
+		resp.Reset()
+		r.CopyTo(req)
 		s := time.Now()
 
 		var code int
 		var size int
 
-		resp.Reset()
 		var err error
 		if b.Timeout > 0 {
 			err = client.DoTimeout(req, resp, b.Timeout)
@@ -174,64 +184,50 @@ func (b *Boomer) runWorker(wg *sync.WaitGroup, ch chan struct{}) {
 			code = resp.Header.StatusCode()
 		}
 
-		if b.ReadAll {
-			resp.Body()
-		}
-
-    if b.Duration == 0 {
-			b.incProgress()
-		}
-		b.results <- &result{
-			statusCode:    code,
-			duration:      time.Now().Sub(s),
-			err:           err,
-			contentLength: size,
-		}
+		b.notifyResult(code, size, err, time.Now().Sub(s))
 	}
 	fasthttp.ReleaseResponse(resp)
 	fasthttp.ReleaseRequest(req)
-	wg.Done()
+	b.wg.Done()
 }
 
-func (b *Boomer) runWorkers() {
-	client = &fasthttp.Client{
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		MaxConnsPerHost: b.C * 2,
+func (b *Boomer) notifyResult(code int, size int, err error, d time.Duration) {
+	b.results <- Result{
+		StatusCode:    code,
+		Duration:      d,
+		Err:           err,
+		ContentLength: size,
 	}
-	var wg sync.WaitGroup
-	wg.Add(b.C)
+}
 
-	var throttle <-chan time.Time
-	if b.QPS > 0 {
-		throttle = time.Tick(time.Duration(1e6/(b.QPS)) * time.Microsecond)
+func (b *Boomer) checkRateLimit() error {
+	if b.bucket == nil {
+		return nil
 	}
+	_, err := b.bucket.Add(1)
+	return err
+}
 
-	jobsch := make(chan struct{}, b.C)
-	for i := 0; i < b.C; i++ {
-		go b.runWorker(&wg, jobsch)
-	}
+func (b *Boomer) triggerLoop() {
+	defer b.wg.Done()
+	defer close(b.jobs)
 
-	i := 0
-Loop:
+	var i uint
 	for {
-		if i >= b.N {
-			break Loop
-		}
-		if b.QPS > 0 {
-			<-throttle
+		if b.Duration == 0 && i >= b.N {
+			return
 		}
 		select {
 		case <-b.stop:
-			break Loop
-		case jobsch <- struct{}{}:
-			if b.Duration == 0 {
+			return
+		default:
+			err := b.checkRateLimit()
+			if err == nil {
+				b.jobs <- b.Request
 				i++
+			} else {
+				time.Sleep(b.bucket.Reset().Sub(time.Now()))
 			}
-			continue
 		}
 	}
-	close(jobsch)
-	wg.Wait()
 }

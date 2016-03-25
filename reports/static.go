@@ -12,28 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package boomer
+package static
 
 import (
 	"fmt"
-	"github.com/sschepens/gohistogram"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sschepens/gohistogram"
+	"github.com/sschepens/pla/boomer"
 )
 
 const (
 	barChar = "∎"
 )
 
-type report struct {
+type Report struct {
 	avgTotal float64
 	fastest  float64
 	slowest  float64
 	average  float64
 	rps      float64
 
-	results chan *result
+	results chan *boomer.Result
 	start   time.Time
 	total   time.Duration
 
@@ -41,16 +43,13 @@ type report struct {
 	statusCodeDist map[int]int
 	sizeTotal      int64
 
-	output string
-
 	wg    *sync.WaitGroup
 	histo *gohistogram.NumericHistogram
 }
 
-func newReport(size int, results chan *result, output string) *report {
+func NewReport(size int, results chan *boomer.Result) *Report {
 	wg := &sync.WaitGroup{}
-	r := &report{
-		output:         output,
+	r := &Report{
 		results:        results,
 		start:          time.Now(),
 		statusCodeDist: make(map[int]int),
@@ -63,30 +62,30 @@ func newReport(size int, results chan *result, output string) *report {
 	return r
 }
 
-func (r *report) process() {
+func (r *Report) process() {
 	for res := range r.results {
-		if res.err != nil {
-			r.errorDist[res.err.Error()]++
+		if res.Err != nil {
+			r.errorDist[res.Err.Error()]++
 		} else {
-			sec := res.duration.Seconds()
+			sec := res.Duration.Seconds()
 			if r.slowest == 0 || sec > r.slowest {
 				r.slowest = sec
 			}
 			if r.fastest == 0 || r.fastest > sec {
 				r.fastest = sec
 			}
-			r.histo.Add(res.duration.Seconds())
-			r.avgTotal += res.duration.Seconds()
-			r.statusCodeDist[res.statusCode]++
-			if res.contentLength > 0 {
-				r.sizeTotal += int64(res.contentLength)
+			r.histo.Add(res.Duration.Seconds())
+			r.avgTotal += res.Duration.Seconds()
+			r.statusCodeDist[res.StatusCode]++
+			if res.ContentLength > 0 {
+				r.sizeTotal += int64(res.ContentLength)
 			}
 		}
 	}
 	r.wg.Done()
 }
 
-func (r *report) finalize() {
+func (r *Report) finalize() {
 	r.wg.Wait()
 	r.total = time.Now().Sub(r.start)
 	count := float64(r.histo.Count())
@@ -95,12 +94,7 @@ func (r *report) finalize() {
 	r.print()
 }
 
-func (r *report) print() {
-	if r.output == "csv" {
-		r.printCSV()
-		return
-	}
-
+func (r *Report) print() {
 	if r.histo.Count() > 0 {
 		fmt.Printf("\nSummary:\n")
 		fmt.Printf("  Total:\t%4.4f secs.\n", r.total.Seconds())
@@ -122,14 +116,8 @@ func (r *report) print() {
 	}
 }
 
-func (r *report) printCSV() {
-	//for i, val := range r.lats {
-	//	fmt.Printf("%v,%4.4f\n", i+1, val)
-	//}
-}
-
 // Prints percentile latencies.
-func (r *report) printLatencies() {
+func (r *Report) printLatencies() {
 	pctls := []int{10, 25, 50, 75, 90, 95, 99}
 	fmt.Printf("\nLatency distribution:\n")
 	cent := float64(100)
@@ -141,7 +129,7 @@ func (r *report) printLatencies() {
 	}
 }
 
-func (r *report) printHistogram() {
+func (r *Report) printHistogram() {
 	fmt.Printf("\nResponse time histogram:\n")
 	bins := r.histo.Bins()
 	max := bins[0].Count
@@ -161,14 +149,14 @@ func (r *report) printHistogram() {
 }
 
 // Prints status code distribution.
-func (r *report) printStatusCodes() {
+func (r *Report) printStatusCodes() {
 	fmt.Printf("\nStatus code distribution:\n")
 	for code, num := range r.statusCodeDist {
 		fmt.Printf("  [%d]\t%d responses\n", code, num)
 	}
 }
 
-func (r *report) printErrors() {
+func (r *Report) printErrors() {
 	fmt.Printf("\nError distribution:\n")
 	for err, num := range r.errorDist {
 		fmt.Printf("  [%d]\t%s\n", num, err)

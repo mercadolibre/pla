@@ -15,18 +15,20 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	gourl "net/url"
 	"os"
+	"os/signal"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
 	"encoding/base64"
+
+	"github.com/sschepens/pb"
 	"github.com/sschepens/pla/boomer"
+	"github.com/sschepens/pla/reporters"
 	"github.com/valyala/fasthttp"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -46,153 +48,60 @@ func (s *stringSlice) String() string {
 }
 
 var (
-	headerList  stringSlice
-	m           = flag.String("m", "GET", "")
-	headers     = flag.String("h", "", "")
-	body        = flag.String("d", "", "")
-	accept      = flag.String("A", "", "")
-	contentType = flag.String("T", "text/html", "")
-	authHeader  = flag.String("a", "", "")
-	readAll     = flag.Bool("readall", false, "")
+	app      = kingpin.New("pla", "Tiny and powerful HTTP load generator.")
+	n        = app.Flag("amount", "Number of requests to run.").Short('n').Default("0").Uint()
+	c        = app.Flag("concurrency", "Concurrency, number of requests to run concurrently. Cannot be larger than n.").Short('c').Default("0").Uint()
+	q        = app.Flag("qps", "Rate Limit, in seconds (QPS).").Short('q').Default("0").Uint()
+	duration = app.Flag("length", "Length or duration of test, ex: 10s, 1m, 1h, etc. Invalidates n.").Short('l').Default("0s").Duration()
 
-	output = flag.String("o", "", "")
+	m          = app.Flag("method", "HTTP method.").Short('m').Default("GET").String()
+	headerList = app.Flag("header", "Add custom HTTP header, name1:value1. Can be repeated for more headers.").Short('H').Strings()
+	timeout    = app.Flag("timeout", "Request timeout, ex: 10s, 1m, 1h, etc.").Short('t').Default("0s").Duration()
+	body       = app.Flag("body", "Request Body.").Short('d').Default("").String()
+	authHeader = app.Flag("auth", "Basic Authentication, username:password.").Short('a').Default("").String()
 
-	c    = flag.Int("c", 50, "")
-	n    = flag.Int("n", 200, "")
-	q    = flag.Int("q", 0, "")
-	t    = flag.Int("t", 0, "")
-	duration = flag.Int("l", 0, "")
-	cpus = flag.Int("cpus", runtime.GOMAXPROCS(-1), "")
+	disableCompression = app.Flag("disable-compression", "Disable compression.").Default("false").Bool()
+	disableKeepAlives  = app.Flag("disable-keepalive", "Disable keep-alive.").Default("false").Bool()
 
-	disableCompression = flag.Bool("disable-compression", false, "")
-	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
-	proxyAddr          = flag.String("x", "", "")
+	url            = app.Arg("url", "URL").Required().String()
+	boomerInstance *boomer.Boomer
+	progressBar    *pb.ProgressBar
+	reporter       *reports.StaticReport
 )
 
-var usage = `Usage: pla [options...] <url>
-
-Options:
-  -n  Number of requests to run.
-  -c  Number of requests to run concurrently. Total number of requests cannot
-      be smaller than the concurency level.
-  -q  Rate limit, in seconds (QPS).
-  -o  Output type. If none provided, a summary is printed.
-      "csv" is the only supported alternative. Dumps the response
-      metrics in comma-seperated values format.
-
-  -m  HTTP method, one of GET, POST, PUT, DELETE, HEAD, OPTIONS.
-  -H  Add custom HTTP header, name1:value1. Can be repeated for more headers.
-  -h  Custom HTTP headers, name1:value1;name2:value2.
-  -t  Timeout in ms.
-  -A  HTTP Accept header.
-  -d  HTTP request body.
-	-l  Length or duration of test in minutes, invalidates number of requests.
-  -T  Content-type, defaults to "text/html".
-  -a  Basic authentication, username:password.
-  -x  HTTP Proxy address as host:port.
-
-  -readall              Consumes the entire request body.
-  -disable-compression  Disable compression.
-  -disable-keepalive    Disable keep-alive, prevents re-use of TCP
-                        connections between different HTTP requests.
-  -cpus                 Number of used cpu cores.
-                        (default for current machine is %d cores)
-`
-
 func main() {
-	flag.Var(&headerList, "H", "")
-	flag.Usage = func() {
-		fmt.Fprint(os.Stderr, fmt.Sprintf(usage, runtime.NumCPU()))
-	}
-
-	flag.Parse()
-	if flag.NArg() < 1 {
+	app.HelpFlag.Short('h')
+	if len(os.Args) < 2 {
 		usageAndExit("")
 	}
+	_, err := app.Parse(os.Args[1:])
+	if err != nil {
+		usageAndExit(err.Error())
+	}
 
-	runtime.GOMAXPROCS(*cpus)
 	num := *n
 	conc := *c
 	q := *q
 
-	if num <= 0 || conc <= 0 {
-		usageAndExit("n and c cannot be smaller than 1.")
+	if *duration <= 0 && num <= 0 {
+		usageAndExit("length or amount must be specified")
 	}
 
-	if *duration < 0 {
-		usageAndExit("duration cannot be negative.")
+	if conc <= 0 {
+		usageAndExit("cconcurrency cannot be smaller than 1.")
+	}
+
+	if num > 0 && conc > num {
+		usageAndExit("concurrency cannot be greater than amount")
 	}
 
 	var (
-		url, method string
+		method string
 		// Username and password for basic auth
 		username, password string
-		// request headers
 	)
 
-	url = flag.Args()[0]
 	method = strings.ToUpper(*m)
-
-	if *output != "csv" && *output != "" {
-		usageAndExit("Invalid output type; only csv is supported.")
-	}
-
-	var proxyURL *gourl.URL
-	if *proxyAddr != "" {
-		var err error
-		proxyURL, err = gourl.Parse(*proxyAddr)
-		if err != nil {
-			usageAndExit(err.Error())
-		}
-	}
-
-	req := fasthttp.AcquireRequest()
-	req.SetRequestURI(url)
-	req.URI().Update(url)
-	if len(req.URI().Host()) == 0 {
-			req.URI().Update("http://" + url)
-			if len(req.URI().Host()) == 0 {
-				usageAndExit("invalid url ''" + req.URI().String() + "'', unable to detect host")
-			}
-	}
-	req.Header.SetMethod(method)
-	req.SetBodyString(*body)
-	if username != "" || password != "" {
-		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
-	}
-
-	// set content-type
-	req.Header.Set("Content-Type", *contentType)
-	// set any other additional headers
-	if *headers != "" {
-		headers := strings.Split(*headers, ";")
-		for _, h := range headers {
-			match, err := parseInputWithRegexp(h, headerRegexp)
-			if err != nil {
-				usageAndExit(err.Error())
-			}
-			req.Header.Set(match[1], match[2])
-		}
-	}
-	for _, h := range headerList {
-		match, err := parseInputWithRegexp(h, headerRegexp)
-		if err != nil {
-			usageAndExit(err.Error())
-		}
-		req.Header.Set(match[1], match[2])
-	}
-
-	if *accept != "" {
-		req.Header.Set("Accept", *accept)
-	}
-
-	if !*disableCompression {
-		req.Header.Set("Accept-Encoding", "gzip,deflate")
-	}
-
-	if *disableKeepAlives {
-		req.SetConnectionClose()
-	}
 
 	// set basic auth if set
 	if *authHeader != "" {
@@ -203,25 +112,67 @@ func main() {
 		username, password = match[1], match[2]
 	}
 
-	(&boomer.Boomer{
-		Request:       req,
-		N:             num,
-		C:             conc,
-		Duration:      time.Duration(*duration) * time.Minute,
-		QPS:           q,
-		Timeout:       time.Duration(*t) * time.Millisecond,
-		ProxyAddr:     proxyURL,
-		Output:        *output,
-		ReadAll:       *readAll,
-	}).Run()
+	req := fasthttp.AcquireRequest()
+	req.URI().Update(*url)
+	if len(req.URI().Host()) == 0 {
+		req.URI().Update("http://" + *url)
+		if len(req.URI().Host()) == 0 {
+			usageAndExit("invalid url ''" + req.URI().String() + "'', unable to detect host")
+		}
+	}
+	req.Header.SetMethod(method)
+	req.SetBodyString(*body)
+	if username != "" || password != "" {
+		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(username+":"+password)))
+	}
+
+	// set any other additional headers
+	for _, h := range *headerList {
+		match, err := parseInputWithRegexp(h, headerRegexp)
+		if err != nil {
+			usageAndExit(err.Error())
+		}
+		req.Header.Set(match[1], match[2])
+	}
+
+	if !*disableCompression {
+		req.Header.Set("Accept-Encoding", "gzip,deflate")
+	}
+
+	if *disableKeepAlives {
+		req.SetConnectionClose()
+	}
+
+	reporter = reports.NewStaticReport()
+	progressBar = newProgressBar(num, *duration)
+	boomerInstance = boomer.NewBoomer(req).
+		WithAmount(num).
+		WithConcurrency(conc).
+		WithDuration(*duration).
+		WithTimeout(*timeout).
+		WithRateLimit(q, time.Second)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		boomerInstance.Stop()
+	}()
+
+	boomerInstance.Run()
+	go processResults()
+	boomerInstance.Wait()
+	time.Sleep(1 * time.Millisecond)
+	progressBar.Finish()
+	reporter.Finalize()
 }
 
 func usageAndExit(msg string) {
 	if msg != "" {
-		fmt.Fprintf(os.Stderr, msg)
+		fmt.Fprint(os.Stderr, msg)
 		fmt.Fprintf(os.Stderr, "\n\n")
 	}
-	flag.Usage()
+	app.Usage(os.Args[1:])
 	fmt.Fprintf(os.Stderr, "\n")
 	os.Exit(1)
 }
@@ -233,4 +184,34 @@ func parseInputWithRegexp(input, regx string) ([]string, error) {
 		return nil, fmt.Errorf("could not parse the provided input; input = %v", input)
 	}
 	return matches, nil
+}
+
+func newProgressBar(total uint, duration time.Duration) *pb.ProgressBar {
+	if duration > 0 {
+		progressBar = pb.New(100)
+		ticker := time.NewTicker(duration / 100)
+		go func() {
+			for range ticker.C {
+				progressBar.Increment()
+			}
+		}()
+	} else {
+		progressBar = pb.New(int(total))
+	}
+	progressBar.BarStart = "Pl"
+	progressBar.BarEnd = "!"
+	progressBar.Empty = " "
+	progressBar.Current = "a"
+	progressBar.CurrentN = "a"
+	progressBar.Start()
+	return progressBar
+}
+
+func processResults() {
+	for res := range boomerInstance.Results() {
+		reporter.ProcessResult(res)
+		if *duration == 0 {
+			progressBar.Increment()
+		}
+	}
 }
