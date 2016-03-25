@@ -50,9 +50,9 @@ func (s *stringSlice) String() string {
 var (
 	app      = kingpin.New("pla", "Tiny and powerful HTTP load generator.")
 	n        = app.Flag("amount", "Number of requests to run.").Short('n').Default("0").Uint()
+	duration = app.Flag("length", "Length or duration of test, ex: 10s, 1m, 1h, etc. Invalidates n.").Short('l').Default("0s").Duration()
 	c        = app.Flag("concurrency", "Concurrency, number of requests to run concurrently. Cannot be larger than n.").Short('c').Default("0").Uint()
 	q        = app.Flag("qps", "Rate Limit, in seconds (QPS).").Short('q').Default("0").Uint()
-	duration = app.Flag("length", "Length or duration of test, ex: 10s, 1m, 1h, etc. Invalidates n.").Short('l').Default("0s").Duration()
 
 	m          = app.Flag("method", "HTTP method.").Short('m').Default("GET").String()
 	headerList = app.Flag("header", "Add custom HTTP header, name1:value1. Can be repeated for more headers.").Short('H').Strings()
@@ -63,7 +63,7 @@ var (
 	disableCompression = app.Flag("disable-compression", "Disable compression.").Default("false").Bool()
 	disableKeepAlives  = app.Flag("disable-keepalive", "Disable keep-alive.").Default("false").Bool()
 
-	url            = app.Arg("url", "URL").Required().String()
+	url            = app.Arg("url", "Request URL").Required().String()
 	boomerInstance *boomer.Boomer
 	progressBar    *pb.ProgressBar
 	reporter       *reports.StaticReport
@@ -169,7 +169,7 @@ func main() {
 
 func usageAndExit(msg string) {
 	if msg != "" {
-		fmt.Fprint(os.Stderr, msg)
+		fmt.Fprintf(os.Stderr, "Error: %s", msg)
 		fmt.Fprintf(os.Stderr, "\n\n")
 	}
 	app.Usage(os.Args[1:])
