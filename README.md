@@ -1,4 +1,4 @@
-# pla
+# pla [![Build Status](https://travis-ci.org/sschepens/pla.svg?branch=master)](https://travis-ci.org/sschepens/pla)
 
 Pla is a tiny program that sends some load to a web application. It's similar to Apache Bench ([ab](http://httpd.apache.org/docs/2.2/programs/ab.html)), but with better availability across different platforms and a less troubling installation experience.
 
