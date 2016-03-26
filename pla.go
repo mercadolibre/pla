@@ -39,7 +39,7 @@ var (
 	app      = kingpin.New("pla", "Tiny and powerful HTTP load generator.")
 	n        = app.Flag("amount", "Number of requests to run.").Short('n').Default("0").Uint()
 	duration = app.Flag("length", "Length or duration of test, ex: 10s, 1m, 1h, etc. Invalidates n.").Short('l').Default("0s").Duration()
-	c        = app.Flag("concurrency", "Concurrency, number of requests to run concurrently. Cannot be larger than n.").Short('c').Default("0").Uint()
+	c        = app.Flag("concurrency", "Concurrency, number of requests to run concurrently. If concurrency is set as 0 pla will run with the same amount of cores that the processor has. Cannot be larger than n.").Short('c').Default("0").Uint()
 	q        = app.Flag("qps", "Rate Limit, in seconds (QPS).").Short('q').Default("0").Uint()
 
 	m          = app.Flag("method", "HTTP method.").Short('m').Default("GET").String()
@@ -70,8 +70,8 @@ func main() {
 		usageAndExit("length or amount must be specified")
 	}
 
-	if *c <= 0 {
-		usageAndExit("cconcurrency cannot be smaller than 1.")
+	if *c < 0 {
+		usageAndExit("cconcurrency cannot be smaller than 0")
 	}
 
 	if *n > 0 && *c > *n {
