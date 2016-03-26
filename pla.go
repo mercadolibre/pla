@@ -55,7 +55,7 @@ var (
 	url            = app.Arg("url", "Request URL").Required().String()
 	boomerInstance *boomer.Boomer
 	progressBar    *pb.ProgressBar
-	reporter       *reports.StaticReport
+	reporter       *reporters.StaticReport
 )
 
 func main() {
@@ -129,7 +129,7 @@ func main() {
 		req.SetConnectionClose()
 	}
 
-	reporter = reports.NewStaticReport()
+	reporter = reporters.NewStaticReport()
 	progressBar = newProgressBar()
 	boomerInstance = boomer.NewBoomer(req).
 		WithAmount(*n).
