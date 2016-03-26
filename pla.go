@@ -24,9 +24,8 @@ import (
 
 	"encoding/base64"
 
-	"github.com/sschepens/pb"
 	"github.com/sschepens/pla/boomer"
-	"github.com/sschepens/pla/reporters"
+	"github.com/sschepens/pla/interfaces"
 	"github.com/valyala/fasthttp"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -54,8 +53,7 @@ var (
 
 	url            = app.Arg("url", "Request URL").Required().String()
 	boomerInstance *boomer.Boomer
-	progressBar    *pb.ProgressBar
-	reporter       *reporters.StaticReport
+	ui             Interface
 )
 
 func main() {
@@ -129,8 +127,7 @@ func main() {
 		req.SetConnectionClose()
 	}
 
-	reporter = reporters.NewStaticReport()
-	progressBar = newProgressBar()
+	ui = interfaces.NewBasicInterface()
 	boomerInstance = boomer.NewBoomer(req).
 		WithAmount(*n).
 		WithConcurrency(*c).
@@ -145,12 +142,12 @@ func main() {
 		boomerInstance.Stop()
 	}()
 
+	ui.Start(boomerInstance)
 	boomerInstance.Run()
 	go processResults()
 	boomerInstance.Wait()
 	time.Sleep(1 * time.Millisecond)
-	progressBar.Finish()
-	reporter.Finalize()
+	ui.End()
 }
 
 func usageAndExit(msg string) {
@@ -172,32 +169,8 @@ func parseInputWithRegexp(input, regx string) ([]string, error) {
 	return matches, nil
 }
 
-func newProgressBar() *pb.ProgressBar {
-	if *duration > 0 {
-		progressBar = pb.New(100)
-		ticker := time.NewTicker(*duration / 100)
-		go func() {
-			for range ticker.C {
-				progressBar.Increment()
-			}
-		}()
-	} else {
-		progressBar = pb.New(int(*n))
-	}
-	progressBar.BarStart = "Pl"
-	progressBar.BarEnd = "!"
-	progressBar.Empty = " "
-	progressBar.Current = "a"
-	progressBar.CurrentN = "a"
-	progressBar.Start()
-	return progressBar
-}
-
 func processResults() {
 	for res := range boomerInstance.Results() {
-		reporter.ProcessResult(res)
-		if *duration == 0 {
-			progressBar.Increment()
-		}
+		ui.ProcessResult(res)
 	}
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reporters
+package interfaces
 
 import (
 	"fmt"
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/sschepens/gohistogram"
+	"github.com/sschepens/pb"
 	"github.com/sschepens/pla/boomer"
 )
 
@@ -27,7 +28,7 @@ const (
 	barChar = "∎"
 )
 
-type StaticReport struct {
+type BasicInterface struct {
 	avgTotal float64
 	fastest  float64
 	slowest  float64
@@ -41,11 +42,13 @@ type StaticReport struct {
 	statusCodeDist map[int]int
 	sizeTotal      int64
 
+	boom  *boomer.Boomer
 	histo *gohistogram.NumericHistogram
+	bar   *pb.ProgressBar
 }
 
-func NewStaticReport() *StaticReport {
-	return &StaticReport{
+func NewBasicInterface() *BasicInterface {
+	return &BasicInterface{
 		start:          time.Now(),
 		statusCodeDist: make(map[int]int),
 		errorDist:      make(map[string]int),
@@ -53,70 +56,98 @@ func NewStaticReport() *StaticReport {
 	}
 }
 
-func (r *StaticReport) ProcessResult(res boomer.Result) {
+func (b *BasicInterface) Start(boom *boomer.Boomer) {
+	b.boom = boom
+	b.initProgressBar()
+}
+
+func (b *BasicInterface) ProcessResult(res boomer.Result) {
 	if res.Err != nil {
-		r.errorDist[res.Err.Error()]++
+		b.errorDist[res.Err.Error()]++
 	} else {
 		sec := res.Duration.Seconds()
-		if r.slowest == 0 || sec > r.slowest {
-			r.slowest = sec
+		if b.slowest == 0 || sec > b.slowest {
+			b.slowest = sec
 		}
-		if r.fastest == 0 || r.fastest > sec {
-			r.fastest = sec
+		if b.fastest == 0 || b.fastest > sec {
+			b.fastest = sec
 		}
-		r.histo.Add(res.Duration.Seconds())
-		r.avgTotal += res.Duration.Seconds()
-		r.statusCodeDist[res.StatusCode]++
+		b.histo.Add(res.Duration.Seconds())
+		b.avgTotal += res.Duration.Seconds()
+		b.statusCodeDist[res.StatusCode]++
 		if res.ContentLength > 0 {
-			r.sizeTotal += int64(res.ContentLength)
+			b.sizeTotal += int64(res.ContentLength)
 		}
+	}
+	if b.boom.Duration == 0 {
+		b.bar.Increment()
 	}
 }
 
-func (r *StaticReport) Finalize() {
-	r.total = time.Now().Sub(r.start)
-	count := float64(r.histo.Count())
-	r.rps = count / r.total.Seconds()
-	r.average = r.avgTotal / count
-	r.print()
+func (b *BasicInterface) End() {
+	b.total = time.Now().Sub(b.start)
+	count := float64(b.histo.Count())
+	b.rps = count / b.total.Seconds()
+	b.average = b.avgTotal / count
+	b.print()
 }
 
-func (r *StaticReport) print() {
-	if r.histo.Count() > 0 {
+func (b *BasicInterface) initProgressBar() {
+	if b.boom.Duration > 0 {
+		b.bar = pb.New(100)
+		ticker := time.NewTicker(b.boom.Duration / 100)
+		go func() {
+			for range ticker.C {
+				b.bar.Increment()
+			}
+		}()
+	} else {
+		b.bar = pb.New(int(b.boom.N))
+	}
+	b.bar.BarStart = "Pl"
+	b.bar.BarEnd = "!"
+	b.bar.Empty = " "
+	b.bar.Current = "a"
+	b.bar.CurrentN = "a"
+	b.bar.Start()
+}
+
+func (b *BasicInterface) print() {
+	if b.histo.Count() > 0 {
 		fmt.Printf("\nSummary:\n")
-		fmt.Printf("  Total:\t%4.4f secs.\n", r.total.Seconds())
-		fmt.Printf("  Slowest:\t%4.4f secs.\n", r.slowest)
-		fmt.Printf("  Fastest:\t%4.4f secs.\n", r.fastest)
-		fmt.Printf("  Average:\t%4.4f secs.\n", r.average)
-		fmt.Printf("  Requests/sec:\t%4.4f\n", r.rps)
-		if r.sizeTotal > 0 {
-			fmt.Printf("  Total Data Received:\t%d bytes.\n", r.sizeTotal)
-			fmt.Printf("  Response Size per Request:\t%d bytes.\n", r.sizeTotal/int64(r.histo.Count()))
+		fmt.Printf("  Total:\t%4.4f secs.\n", b.total.Seconds())
+		fmt.Printf("  Slowest:\t%4.4f secs.\n", b.slowest)
+		fmt.Printf("  Fastest:\t%4.4f secs.\n", b.fastest)
+		fmt.Printf("  Average:\t%4.4f secs.\n", b.average)
+		fmt.Printf("  Requests/sec:\t%4.4f\n", b.rps)
+		if b.sizeTotal > 0 {
+			fmt.Printf("  Total Data Received:\t%d bytes.\n", b.sizeTotal)
+			fmt.Printf("  Response Size per Request:\t%d bytes.\n", b.sizeTotal/int64(b.histo.Count()))
 		}
-		r.printStatusCodes()
-		r.printHistogram()
-		r.printLatencies()
+		b.printStatusCodes()
+		b.printHistogram()
+		b.printLatencies()
 	}
 
-	if len(r.errorDist) > 0 {
-		r.printErrors()
+	if len(b.errorDist) > 0 {
+		b.printErrors()
 	}
 }
 
 // Prints percentile latencies.
-func (r *StaticReport) printLatencies() {
+func (b *BasicInterface) printLatencies() {
 	pctls := []int{10, 25, 50, 75, 90, 95, 99}
 	fmt.Printf("\nLatency distribution:\n")
 	cent := float64(100)
 	for _, p := range pctls {
-		q := r.histo.Quantile(float64(p) / cent)
+		q := b.histo.Quantile(float64(p) / cent)
 		if q > 0 {
 			fmt.Printf("  %v%% in %4.4f secs.\n", p, q)
 		}
 	}
 }
 
-func (r *StaticReport) printHistogram() {
+func (r *BasicInterface) printHistogram() {
 	fmt.Printf("\nResponse time histogram:\n")
 	bins := r.histo.Bins()
 	max := bins[0].Count
@@ -136,14 +167,14 @@ func (r *StaticReport) printHistogram() {
 }
 
 // Prints status code distribution.
-func (r *StaticReport) printStatusCodes() {
+func (r *BasicInterface) printStatusCodes() {
 	fmt.Printf("\nStatus code distribution:\n")
 	for code, num := range r.statusCodeDist {
 		fmt.Printf("  [%d]\t%d responses\n", code, num)
 	}
 }
 
-func (r *StaticReport) printErrors() {
+func (r *BasicInterface) printErrors() {
 	fmt.Printf("\nError distribution:\n")
 	for err, num := range r.errorDist {
 		fmt.Printf("  [%d]\t%s\n", num, err)
