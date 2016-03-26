@@ -71,7 +71,7 @@ func main() {
 	}
 
 	if *c < 0 {
-		usageAndExit("cconcurrency cannot be smaller than 0")
+		usageAndExit("concurrency cannot be smaller than 0")
 	}
 
 	if *n > 0 && *c > *n {
