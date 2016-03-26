@@ -17,13 +17,14 @@ package boomer
 
 import (
 	"crypto/tls"
-	"github.com/Clever/leakybucket"
-	"github.com/Clever/leakybucket/memory"
-	"github.com/valyala/fasthttp"
 	"math"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/Clever/leakybucket"
+	"github.com/Clever/leakybucket/memory"
+	"github.com/valyala/fasthttp"
 )
 
 var client = &fasthttp.Client{
