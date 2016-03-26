@@ -17,13 +17,13 @@ package boomer
 
 import (
 	"crypto/tls"
-	"math"
-	"sync"
-	"time"
-
 	"github.com/Clever/leakybucket"
 	"github.com/Clever/leakybucket/memory"
 	"github.com/valyala/fasthttp"
+	"math"
+	"runtime"
+	"sync"
+	"time"
 )
 
 var client = &fasthttp.Client{
@@ -108,6 +108,9 @@ func (b *Boomer) WithRateLimit(n uint, rate time.Duration) *Boomer {
 func (b *Boomer) WithConcurrency(c uint) *Boomer {
 	if b.running {
 		panic("Cannot modify boomer while running")
+	}
+	if c == 0 {
+		c = uint(runtime.NumCPU())
 	}
 	b.C = c
 	b.results = make(chan Result, c)
