@@ -28,6 +28,7 @@ const (
 	barChar = "∎"
 )
 
+// BasicInterface is Pla's default text-based terminal interface.
 type BasicInterface struct {
 	avgTotal float64
 	fastest  float64
@@ -47,6 +48,7 @@ type BasicInterface struct {
 	bar   *pb.ProgressBar
 }
 
+// NewBasicInterface instantiates a new BasicInterface.
 func NewBasicInterface() *BasicInterface {
 	return &BasicInterface{
 		start:          time.Now(),
@@ -56,11 +58,13 @@ func NewBasicInterface() *BasicInterface {
 	}
 }
 
+// Start initializes interface
 func (b *BasicInterface) Start(boom *boomer.Boomer) {
 	b.boom = boom
 	b.initProgressBar()
 }
 
+// ProcessResult increments ProgressBar and keeps track of statistics.
 func (b *BasicInterface) ProcessResult(res boomer.Result) {
 	if res.Err != nil {
 		b.errorDist[res.Err.Error()]++
@@ -84,7 +88,9 @@ func (b *BasicInterface) ProcessResult(res boomer.Result) {
 	}
 }
 
+// End finishes interface.
 func (b *BasicInterface) End() {
+	b.bar.Finish()
 	b.total = time.Now().Sub(b.start)
 	count := float64(b.histo.Count())
 	b.rps = count / b.total.Seconds()
@@ -147,9 +153,9 @@ func (b *BasicInterface) printLatencies() {
 	}
 }
 
-func (r *BasicInterface) printHistogram() {
+func (b *BasicInterface) printHistogram() {
 	fmt.Printf("\nResponse time histogram:\n")
-	bins := r.histo.Bins()
+	bins := b.histo.Bins()
 	max := bins[0].Count
 	for i := 1; i < len(bins); i++ {
 		if bins[i].Count > max {
@@ -167,16 +173,16 @@ func (r *BasicInterface) printHistogram() {
 }
 
 // Prints status code distribution.
-func (r *BasicInterface) printStatusCodes() {
+func (b *BasicInterface) printStatusCodes() {
 	fmt.Printf("\nStatus code distribution:\n")
-	for code, num := range r.statusCodeDist {
+	for code, num := range b.statusCodeDist {
 		fmt.Printf("  [%d]\t%d responses\n", code, num)
 	}
 }
 
-func (r *BasicInterface) printErrors() {
+func (b *BasicInterface) printErrors() {
 	fmt.Printf("\nError distribution:\n")
-	for err, num := range r.errorDist {
+	for err, num := range b.errorDist {
 		fmt.Printf("  [%d]\t%s\n", num, err)
 	}
 }

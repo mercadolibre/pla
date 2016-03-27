@@ -34,6 +34,7 @@ var client = &fasthttp.Client{
 	MaxConnsPerHost: math.MaxInt32,
 }
 
+// Result keeps information of a request done by Boomer.
 type Result struct {
 	Err           error
 	StatusCode    int
@@ -41,6 +42,7 @@ type Result struct {
 	ContentLength int
 }
 
+// Boomer is the structure responsible for performing requests.
 type Boomer struct {
 	// Request is the request to be made.
 	Request *fasthttp.Request
@@ -65,8 +67,10 @@ type Boomer struct {
 	wg      *sync.WaitGroup
 }
 
+// NewBoomer returns a new instance of Boomer for the specified request.
 func NewBoomer(req *fasthttp.Request) *Boomer {
 	return &Boomer{
+		C:       uint(runtime.NumCPU()),
 		Request: req,
 		results: make(chan Result),
 		stop:    make(chan struct{}),
@@ -75,11 +79,13 @@ func NewBoomer(req *fasthttp.Request) *Boomer {
 	}
 }
 
+// WithTimeout specifies the timeout for every request made by Boomer.
 func (b *Boomer) WithTimeout(t time.Duration) *Boomer {
 	b.Timeout = t
 	return b
 }
 
+// WithAmount specifies the total amount of requests Boomer should execute.
 func (b *Boomer) WithAmount(n uint) *Boomer {
 	if n > 0 {
 		b.Duration = 0
@@ -88,6 +94,7 @@ func (b *Boomer) WithAmount(n uint) *Boomer {
 	return b
 }
 
+// WithDuration specifies the duration of the test that Boomer will perform.
 func (b *Boomer) WithDuration(d time.Duration) *Boomer {
 	if b.running {
 		panic("Cannot modify boomer while running")
@@ -99,6 +106,7 @@ func (b *Boomer) WithDuration(d time.Duration) *Boomer {
 	return b
 }
 
+// WithRateLimit configures Boomer to never overpass a certain rate.
 func (b *Boomer) WithRateLimit(n uint, rate time.Duration) *Boomer {
 	if n > 0 {
 		b.bucket, _ = memory.New().Create("pla", n-1, rate)
@@ -106,6 +114,8 @@ func (b *Boomer) WithRateLimit(n uint, rate time.Duration) *Boomer {
 	return b
 }
 
+// WithConcurrency determines the amount of concurrency Boomer should use.
+// Defaults to the amount of cores of the running machine.
 func (b *Boomer) WithConcurrency(c uint) *Boomer {
 	if b.running {
 		panic("Cannot modify boomer while running")
