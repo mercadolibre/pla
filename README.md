@@ -16,33 +16,27 @@ Simple as it takes to type the following command:
 
 Pla supports custom headers, request body and basic authentication. It runs provided number of requests in the provided concurrency level, and prints stats.
 ~~~
-Usage: pla [options...] <url>
+usage: pla [<flags>] <url>
 
-Options:
-  -n  Number of requests to run.
-  -c  Number of requests to run concurrently. Total number of requests cannot
-      be smaller than the concurency level.
-  -q  Rate limit, in seconds (QPS).
-  -o  Output type. If none provided, a summary is printed.
-      "csv" is the only supported alternative. Dumps the response
-      metrics in comma-seperated values format.
+Tiny and powerful HTTP load generator.
 
-  -m  HTTP method, one of GET, POST, PUT, DELETE, HEAD, OPTIONS.
-  -h  Custom HTTP headers, name1:value1;name2:value2.
-  -t  Timeout in ms.
-  -A  HTTP Accept header.
-  -d  HTTP request body.
-  -T  Content-type, defaults to "text/html".
-  -a  Basic authentication, username:password.
-  -x  HTTP Proxy address as host:port.
+Flags:
+  -h, --help                 Show context-sensitive help (also try --help-long and --help-man).
+  -n, --amount=0             Number of requests to run.
+  -l, --length=0s            Length or duration of test, ex: 10s, 1m, 1h, etc. Invalidates n.
+  -c, --concurrency=0        Concurrency, number of requests to run concurrently. If concurrency is set as 0 pla will run with the same amount of cores that the processor has.
+                             Cannot be larger than n.
+  -q, --qps=0                Rate Limit, in seconds (QPS).
+  -m, --method="GET"         HTTP method.
+  -H, --header=HEADER ...    Add custom HTTP header, name1:value1. Can be repeated for more headers.
+  -t, --timeout=0s           Request timeout, ex: 10s, 1m, 1h, etc.
+  -d, --body=""              Request Body.
+  -a, --auth=""              Basic Authentication, username:password.
+      --disable-compression  Disable compression.
+      --disable-keepalive    Disable keep-alive.
 
-  -readall              Consumes the entire request body.
-  -allow-insecure       Allow bad/expired TLS/SSL certificates.
-  -disable-compression  Disable compression.
-  -disable-keepalive    Disable keep-alive, prevents re-use of TCP
-                        connections between different HTTP requests.
-  -cpus                 Number of used cpu cores.
-                        (default for current machine is 1 cores)
+Args:
+  <url>  Request URL
 ~~~
 
 This is what happens when you run Pla:
