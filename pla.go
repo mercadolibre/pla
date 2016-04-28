@@ -41,6 +41,7 @@ var (
 	duration = app.Flag("length", "Length or duration of test, ex: 10s, 1m, 1h, etc. Invalidates n.").Short('l').Default("0s").Duration()
 	c        = app.Flag("concurrency", "Concurrency, number of requests to run concurrently. If concurrency is set as 0 pla will run with the same amount of cores that the processor has. Cannot be larger than n.").Short('c').Default("0").Uint()
 	q        = app.Flag("qps", "Rate Limit, in seconds (QPS).").Short('q').Default("0").Uint()
+	f        = app.Flag("fail", "Abort on request failure.").Short('f').Default("false").Bool()
 
 	m          = app.Flag("method", "HTTP method.").Short('m').Default("GET").String()
 	headerList = app.Flag("header", "Add custom HTTP header, name1:value1. Can be repeated for more headers.").Short('H').Strings()
@@ -133,7 +134,8 @@ func main() {
 		WithConcurrency(*c).
 		WithDuration(*duration).
 		WithTimeout(*timeout).
-		WithRateLimit(*q, time.Second)
+		WithRateLimit(*q, time.Second).
+		WithAbortionOnFailure(*f)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
