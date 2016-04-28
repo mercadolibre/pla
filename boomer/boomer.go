@@ -56,12 +56,16 @@ type Boomer struct {
 	// N is the total number of requests to make.
 	N uint
 
+	// F is a flag to abort execution on a request failure
+	F bool
+
 	// Duration is the amount of time the test should run.
 	Duration time.Duration
 
 	bucket  leakybucket.Bucket
 	results chan Result
 	stop    chan struct{}
+	stopLock sync.Mutex
 	jobs    chan *fasthttp.Request
 	running bool
 	wg      *sync.WaitGroup
@@ -128,6 +132,16 @@ func (b *Boomer) WithConcurrency(c uint) *Boomer {
 	return b
 }
 
+// WithAbortionOnFailure determines if pla should stop if any request fails
+func (b *Boomer) WithAbortionOnFailure(f bool) *Boomer {
+	if b.running {
+		panic("Cannot modify boomer while running")
+	}
+
+	b.F = f
+	return b
+}
+
 // Results returns receive-only channel of results
 func (b *Boomer) Results() <-chan Result {
 	return b.results
@@ -135,6 +149,9 @@ func (b *Boomer) Results() <-chan Result {
 
 // Stop indicates Boomer to stop processing new requests
 func (b *Boomer) Stop() {
+	b.stopLock.Lock()
+	defer b.stopLock.Unlock()
+
 	if !b.running {
 		return
 	}
@@ -211,6 +228,12 @@ func (b *Boomer) notifyResult(code int, size int, err error, d time.Duration) {
 		Duration:      d,
 		Err:           err,
 		ContentLength: size,
+	}
+
+	//If any request gets a 5xx status code or conn reset error, and user has specified F flag, pla execution is stopped
+	//Why 5xx? Because it is not considered as an application business error
+	if (code >= 500 || err != nil) && b.F {
+			b.Stop()
 	}
 }
 
