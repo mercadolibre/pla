@@ -77,6 +77,17 @@ This is what happens when you run Pla:
 	Status code distribution:
 	  [200]	1000 responses
 
+## Docker
+
+##### Running
+
+        docker run -ti sschepens/pla -n 100 -c 10 http://www.example.org/
+
+##### Building
+
+        docker build -t pla-builder -f Dockerfile.build .
+        docker run pla-builder | docker build -t sschepens/pla -
+
 ## License
 
 Licensed under the Apache License, Version 2.0 (the "License");
