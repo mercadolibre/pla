@@ -2,5 +2,13 @@ FROM golang:1.6
 
 COPY Dockerfile.run /go/bin/Dockerfile
 
-CMD go get github.com/sschepens/pla && tar -cf - -C bin Dockerfile pla
+RUN apt-get update && apt-get install bzip2 --yes
+
+RUN cd /tmp && \
+  wget http://upx.sourceforge.net/download/upx-3.91-amd64_linux.tar.bz2 -O /tmp/upx-3.91-amd64_linux.tar.bz2 && \
+  tar -xjf upx-3.91-amd64_linux.tar.bz2 && \
+  mv upx-3.91-amd64_linux/upx /bin/upx && \
+  rm -fr /tmp/upx-3.91-amd64_linux.tar.bz2 /tmp/upx-3.91-amd64_linux
+
+CMD go get -ldflags='-s -w' github.com/sschepens/pla && upx --force bin/pla &>/dev/null && tar -cf - -C bin Dockerfile pla
 
