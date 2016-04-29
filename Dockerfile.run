@@ -1,4 +1,4 @@
-FROM busybox:ubuntu-14.04
+FROM progrium/busybox
 
 COPY pla /bin/pla
 ENTRYPOINT ["pla"]
