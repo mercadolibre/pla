@@ -10,5 +10,5 @@ RUN cd /tmp && \
   mv upx-3.91-amd64_linux/upx /bin/upx && \
   rm -fr /tmp/upx-3.91-amd64_linux.tar.bz2 /tmp/upx-3.91-amd64_linux
 
-CMD go get -ldflags='-s -w' github.com/sschepens/pla && upx --force bin/pla &>/dev/null && tar -cf - -C bin Dockerfile pla
+CMD go get -ldflags='-s -w' github.com/sschepens/pla && upx --force bin/pla 1>/dev/null 2>/dev/null && tar -cf - -C bin Dockerfile pla
 
