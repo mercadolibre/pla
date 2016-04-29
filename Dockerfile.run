@@ -1,0 +1,6 @@
+FROM progrium/busybox
+
+COPY pla /bin/pla
+
+ENTRYPOINT ["pla"]
+
