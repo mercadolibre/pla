@@ -1,0 +1,7 @@
+FROM golang:1.6
+
+RUN go get github.com/sschepens/pla
+COPY Dockerfile.run /go/bin/Dockerfile
+
+CMD tar -cf - -C bin Dockerfile pla
+
