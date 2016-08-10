@@ -62,13 +62,13 @@ type Boomer struct {
 	// Duration is the amount of time the test should run.
 	Duration time.Duration
 
-	bucket  leakybucket.Bucket
-	results chan Result
-	stop    chan struct{}
+	bucket   leakybucket.Bucket
+	results  chan Result
+	stop     chan struct{}
 	stopLock sync.Mutex
-	jobs    chan *fasthttp.Request
-	running bool
-	wg      *sync.WaitGroup
+	jobs     chan *fasthttp.Request
+	running  bool
+	wg       *sync.WaitGroup
 }
 
 // NewBoomer returns a new instance of Boomer for the specified request.
@@ -233,7 +233,7 @@ func (b *Boomer) notifyResult(code int, size int, err error, d time.Duration) {
 	//If any request gets a 5xx status code or conn reset error, and user has specified F flag, pla execution is stopped
 	//Why 5xx? Because it is not considered as an application business error
 	if (code >= 500 || err != nil) && b.F {
-			b.Stop()
+		b.Stop()
 	}
 }
 
