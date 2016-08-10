@@ -1,0 +1,9 @@
+engines:
+  govet:
+    enabled: true
+  golint:
+    enabled: true
+
+ratings:
+  paths:
+    - "**.go"
