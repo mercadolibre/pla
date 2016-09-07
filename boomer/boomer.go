@@ -21,18 +21,12 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"net"
 
 	"github.com/Clever/leakybucket"
 	"github.com/Clever/leakybucket/memory"
 	"github.com/valyala/fasthttp"
 )
-
-var client = &fasthttp.Client{
-	TLSConfig: &tls.Config{
-		InsecureSkipVerify: true,
-	},
-	MaxConnsPerHost: math.MaxInt32,
-}
 
 // Result keeps information of a request done by Boomer.
 type Result struct {
@@ -49,6 +43,9 @@ type Boomer struct {
 
 	// Timeout in seconds.
 	Timeout time.Duration
+	ConnectTimeout time.Duration
+	ReadTimeout time.Duration
+	WriteTimeout time.Duration
 
 	// C is the concurrency level, the number of concurrent workers to run.
 	C uint
@@ -69,6 +66,7 @@ type Boomer struct {
 	jobs     chan *fasthttp.Request
 	running  bool
 	wg       *sync.WaitGroup
+	client   *fasthttp.Client
 }
 
 // NewBoomer returns a new instance of Boomer for the specified request.
@@ -171,6 +169,17 @@ func (b *Boomer) Run() {
 	if b.running {
 		return
 	}
+	b.client = &fasthttp.Client{
+		Dial: func(addr string) (net.Conn, error) {
+			return fasthttp.DialTimeout(addr, b.ConnectTimeout)
+		},
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		MaxConnsPerHost: math.MaxInt32,
+		ReadTimeout: b.ReadTimeout,
+		WriteTimeout: b.WriteTimeout,
+	}
 	b.running = true
 	if b.Duration > 0 {
 		time.AfterFunc(b.Duration, func() {
@@ -206,9 +215,9 @@ func (b *Boomer) runWorker() {
 
 		var err error
 		if b.Timeout > 0 {
-			err = client.DoTimeout(req, resp, b.Timeout)
+			err = b.client.DoTimeout(req, resp, b.Timeout)
 		} else {
-			err = client.Do(req, resp)
+			err = b.client.Do(req, resp)
 		}
 		if err == nil {
 			size = resp.Header.ContentLength()
