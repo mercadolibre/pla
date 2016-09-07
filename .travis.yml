@@ -1,5 +1,5 @@
 language: go
-go: 1.6
+go: 1.7
 addons:
   code_climate:
     repo_token: ef86eefc3661f6cece28fd507c288e6ebb989063bc8cf5b4b38c921245ec0b9f
