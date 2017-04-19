@@ -1,4 +1,4 @@
-FROM golang:1.7
+FROM golang:latest
 
 COPY Dockerfile.run /go/bin/Dockerfile
 
