@@ -46,6 +46,7 @@ type BasicInterface struct {
 	boom  *boomer.Boomer
 	histo *gohistogram.NumericHistogram
 	bar   *pb.ProgressBar
+	pct   int
 }
 
 // NewBasicInterface instantiates a new BasicInterface.
@@ -101,10 +102,14 @@ func (b *BasicInterface) End() {
 func (b *BasicInterface) initProgressBar() {
 	if b.boom.Duration > 0 {
 		b.bar = pb.New(100)
+		b.pct = 0
 		ticker := time.NewTicker(b.boom.Duration / 100)
 		go func() {
 			for range ticker.C {
-				b.bar.Increment()
+				if b.pct < 100 {
+					b.pct += 1
+					b.bar.Increment()
+				}
 			}
 		}()
 	} else {

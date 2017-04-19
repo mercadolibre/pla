@@ -48,8 +48,8 @@ var (
 	body       = app.Flag("body", "Request Body.").Short('d').Default("").String()
 	authHeader = app.Flag("auth", "Basic Authentication, username:password.").Short('a').Default("").String()
 
-	timeout            = app.Flag("timeout", "Timeout for the hole request connect+write+read, ex: 10s, 1m, 1h, etc.").Short('t').Default("0s").Duration()
-	connectTimeout     = app.Flag("connect-timeout", "Connect timeout, ex: 10s, 1m, 1h, etc.").Default("0s").Duration()
+	timeout            = app.Flag("timeout", "Timeout for the hole request connect+write+read, ex: 10s, 1m, 1h, etc.").Short('t').Default("30s").Duration()
+	connectTimeout     = app.Flag("connect-timeout", "Connect timeout, ex: 10s, 1m, 1h, etc.").Default("5s").Duration()
 	readTimeout        = app.Flag("read-timeout", "Request read timeout, ex: 10s, 1m, 1h, etc.").Default("0s").Duration()
 	writeTimeout       = app.Flag("write-timeout", "Request write timeout, ex: 10s, 1m, 1h, etc.").Default("0s").Duration()
 	disableCompression = app.Flag("disable-compression", "Disable compression.").Default("false").Bool()
@@ -145,6 +145,8 @@ func main() {
 	go func() {
 		<-c
 		boomerInstance.Stop()
+		ui.End()
+		os.Exit(1)
 	}()
 
 	ui.Start(boomerInstance)
