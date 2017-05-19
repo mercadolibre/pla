@@ -1,4 +1,4 @@
-# pla [![Build Status](https://travis-ci.org/sschepens/pla.svg?branch=master)](https://travis-ci.org/sschepens/pla)
+# pla [![Build Status](https://travis-ci.org/mercadolibre/pla.svg?branch=master)](https://travis-ci.org/mercadolibre/pla)
 
 Pla is a tiny program that sends some load to a web application. It's similar to Apache Bench ([ab](http://httpd.apache.org/docs/2.2/programs/ab.html)), but with better availability across different platforms and a less troubling installation experience.
 
@@ -10,7 +10,7 @@ Due to some issues like memory consumption I decided to fork it.
 
 Simple as it takes to type the following command:
 
-    go get -u github.com/sschepens/pla
+    go get -u github.com/mercadolibre/pla
 
 ## Usage
 
@@ -79,7 +79,7 @@ This is what happens when you run Pla:
 
 ## Docker
 
-        docker run -ti sschepens/pla -n 100 -c 10 http://www.example.org/
+        docker run -ti mercadolibre/pla -n 100 -c 10 http://www.example.org/
 
 ## License
 

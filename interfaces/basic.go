@@ -21,7 +21,7 @@ import (
 
 	"github.com/sschepens/gohistogram"
 	"github.com/sschepens/pb"
-	"github.com/sschepens/pla/boomer"
+	"github.com/mercadolibre/pla/boomer"
 )
 
 const (

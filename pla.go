@@ -24,8 +24,8 @@ import (
 
 	"encoding/base64"
 
-	"github.com/sschepens/pla/boomer"
-	"github.com/sschepens/pla/interfaces"
+	"github.com/mercadolibre/pla/boomer"
+	"github.com/mercadolibre/pla/interfaces"
 	"github.com/valyala/fasthttp"
 	"gopkg.in/alecthomas/kingpin.v2"
 )

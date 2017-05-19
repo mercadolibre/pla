@@ -1,6 +1,6 @@
 package main
 
-import "github.com/sschepens/pla/boomer"
+import "github.com/mercadolibre/pla/boomer"
 
 // Interface determines the interface for Pla's User Interfaces
 type Interface interface {
