@@ -38,7 +38,7 @@ func TestN(t *testing.T) {
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(server.URL)
 	req.Header.SetMethod("GET")
-	boomer := NewBoomer(req).
+	boomer := NewBoomer(string(req.Host()), req).
 		WithAmount(20).
 		WithConcurrency(2)
 	go func() {
@@ -64,7 +64,7 @@ func TestQPS(t *testing.T) {
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(server.URL)
 	req.Header.SetMethod("GET")
-	boomer := NewBoomer(req).
+	boomer := NewBoomer(string(req.Host()), req).
 		WithAmount(20).
 		WithConcurrency(2).
 		WithRateLimit(1, time.Second)
@@ -103,7 +103,7 @@ func TestRequest(t *testing.T) {
 	req.Header.Set("Content-Type", "text/html")
 	req.Header.Set("X-some", "value")
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("username:password")))
-	boomer := NewBoomer(req).
+	boomer := NewBoomer(string(req.Host()), req).
 		WithAmount(1).
 		WithConcurrency(1)
 	go func() {
@@ -141,7 +141,7 @@ func TestBody(t *testing.T) {
 	req.SetRequestURI(server.URL)
 	req.Header.SetMethod("POST")
 	req.SetBody([]byte("Body"))
-	boomer := NewBoomer(req).
+	boomer := NewBoomer(string(req.Host()), req).
 		WithAmount(10).
 		WithConcurrency(1)
 	go func() {

@@ -18,10 +18,10 @@ package boomer
 import (
 	"crypto/tls"
 	"math"
+	"net"
 	"runtime"
 	"sync"
 	"time"
-	"net"
 
 	"github.com/Clever/leakybucket"
 	"github.com/Clever/leakybucket/memory"
@@ -40,12 +40,13 @@ type Result struct {
 type Boomer struct {
 	// Request is the request to be made.
 	Request *fasthttp.Request
+	Addr    string
 
 	// Timeout in seconds.
-	Timeout time.Duration
+	Timeout        time.Duration
 	ConnectTimeout time.Duration
-	ReadTimeout time.Duration
-	WriteTimeout time.Duration
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
 
 	// C is the concurrency level, the number of concurrent workers to run.
 	C uint
@@ -66,13 +67,14 @@ type Boomer struct {
 	jobs     chan *fasthttp.Request
 	running  bool
 	wg       *sync.WaitGroup
-	client   *fasthttp.Client
+	client   *fasthttp.HostClient
 }
 
 // NewBoomer returns a new instance of Boomer for the specified request.
-func NewBoomer(req *fasthttp.Request) *Boomer {
+func NewBoomer(addr string, req *fasthttp.Request) *Boomer {
 	return &Boomer{
 		C:       uint(runtime.NumCPU()),
+		Addr:    addr,
 		Request: req,
 		results: make(chan Result),
 		stop:    make(chan struct{}),
@@ -169,15 +171,16 @@ func (b *Boomer) Run() {
 	if b.running {
 		return
 	}
-	b.client = &fasthttp.Client{
+	b.client = &fasthttp.HostClient{
+		Addr: b.Addr,
 		Dial: func(addr string) (net.Conn, error) {
 			return fasthttp.DialTimeout(addr, b.ConnectTimeout)
 		},
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-		MaxConnsPerHost: math.MaxInt32,
-		ReadTimeout: b.ReadTimeout,
+		MaxConns:     math.MaxInt32,
+		ReadTimeout:  b.ReadTimeout,
 		WriteTimeout: b.WriteTimeout,
 	}
 	b.running = true

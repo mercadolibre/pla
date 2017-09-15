@@ -107,6 +107,10 @@ func main() {
 			usageAndExit("invalid url ''" + req.URI().String() + "'', unable to detect host")
 		}
 	}
+	addr := string(req.URI().Host())
+	if !strings.Contains(addr, ":") {
+		addr = addr + ":80"
+	}
 	req.Header.SetMethod(method)
 	req.SetBodyString(*body)
 	req.Header.SetContentLength(len(req.Body()))
@@ -120,7 +124,11 @@ func main() {
 		if err != nil {
 			usageAndExit(err.Error())
 		}
-		req.Header.Set(match[1], match[2])
+		if match[1] == "Host" || match[1] == "host" {
+			req.SetHost(match[2])
+		} else {
+			req.Header.Set(match[1], match[2])
+		}
 	}
 
 	if !*disableCompression {
@@ -132,7 +140,7 @@ func main() {
 	}
 
 	ui = interfaces.NewBasicInterface()
-	boomerInstance = boomer.NewBoomer(req).
+	boomerInstance = boomer.NewBoomer(addr, req).
 		WithAmount(*n).
 		WithConcurrency(*c).
 		WithDuration(*duration).
