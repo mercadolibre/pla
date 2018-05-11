@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mercadolibre/pla/boomer"
 	"github.com/sschepens/gohistogram"
 	"github.com/sschepens/pb"
-	"github.com/mercadolibre/pla/boomer"
 )
 
 const (
@@ -136,12 +136,15 @@ func (b *BasicInterface) print() {
 			fmt.Printf("  Response Size per Request:\t%d bytes.\n", b.sizeTotal/int64(b.histo.Count()))
 		}
 		b.printStatusCodes()
-		b.printHistogram()
-		b.printLatencies()
 	}
 
 	if len(b.errorDist) > 0 {
 		b.printErrors()
+	}
+
+	if b.histo.Count() > 0 {
+		b.printHistogram()
+		b.printLatencies()
 	}
 }
 
@@ -188,6 +191,6 @@ func (b *BasicInterface) printStatusCodes() {
 func (b *BasicInterface) printErrors() {
 	fmt.Printf("\nError distribution:\n")
 	for err, num := range b.errorDist {
-		fmt.Printf("  [%d]\t%s\n", num, err)
+		fmt.Printf("  [%s]\t%d occurrences\n", err, num)
 	}
 }
