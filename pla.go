@@ -33,6 +33,7 @@ import (
 const (
 	headerRegexp = `^([\w-]+):\s*(.+)`
 	authRegexp   = `^(.+):([^\s].+)`
+	version      = "1.0.0"
 )
 
 var (
@@ -61,6 +62,8 @@ var (
 )
 
 func main() {
+	app.Version(version)
+
 	app.HelpFlag.Short('h')
 	if len(os.Args) < 2 {
 		usageAndExit("")
