@@ -144,6 +144,7 @@ func main() {
 		WithAmount(*n).
 		WithConcurrency(*c).
 		WithDuration(*duration).
+		WithConnectTimeout(*connectTimeout).
 		WithTimeout(*timeout).
 		WithRateLimit(*q, time.Second).
 		WithAbortionOnFailure(*f)

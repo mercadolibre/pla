@@ -87,6 +87,12 @@ func (b *Boomer) WithTimeout(t time.Duration) *Boomer {
 	return b
 }
 
+// WithConnectTimeout specifies the connect timeout for connections made by Boomer.
+func (b *Boomer) WithConnectTimeout(t time.Duration) *Boomer {
+	b.ConnectTimeout = t
+	return b
+}
+
 // WithAmount specifies the total amount of requests Boomer should execute.
 func (b *Boomer) WithAmount(n uint) *Boomer {
 	if n > 0 {
