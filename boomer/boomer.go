@@ -17,7 +17,6 @@ package boomer
 
 import (
 	"crypto/tls"
-	"math"
 	"net"
 	"runtime"
 	"sync"
@@ -67,7 +66,6 @@ type Boomer struct {
 	jobs     chan *fasthttp.Request
 	running  bool
 	wg       *sync.WaitGroup
-	client   *fasthttp.HostClient
 }
 
 // NewBoomer returns a new instance of Boomer for the specified request.
@@ -171,18 +169,6 @@ func (b *Boomer) Run() {
 	if b.running {
 		return
 	}
-	b.client = &fasthttp.HostClient{
-		Addr: b.Addr,
-		Dial: func(addr string) (net.Conn, error) {
-			return fasthttp.DialTimeout(addr, b.ConnectTimeout)
-		},
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		MaxConns:     math.MaxInt32,
-		ReadTimeout:  b.ReadTimeout,
-		WriteTimeout: b.WriteTimeout,
-	}
 	b.running = true
 	if b.Duration > 0 {
 		time.AfterFunc(b.Duration, func() {
@@ -205,6 +191,18 @@ func (b *Boomer) runWorkers() {
 }
 
 func (b *Boomer) runWorker() {
+	client := &fasthttp.HostClient{
+		Addr: b.Addr,
+		Dial: func(addr string) (net.Conn, error) {
+			return fasthttp.DialTimeout(addr, b.ConnectTimeout)
+		},
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		MaxConns:     1,
+		ReadTimeout:  b.ReadTimeout,
+		WriteTimeout: b.WriteTimeout,
+	}
 	resp := fasthttp.AcquireResponse()
 	req := fasthttp.AcquireRequest()
 	for r := range b.jobs {
@@ -218,9 +216,9 @@ func (b *Boomer) runWorker() {
 
 		var err error
 		if b.Timeout > 0 {
-			err = b.client.DoTimeout(req, resp, b.Timeout)
+			err = client.DoTimeout(req, resp, b.Timeout)
 		} else {
-			err = b.client.Do(req, resp)
+			err = client.Do(req, resp)
 		}
 		if err == nil {
 			size = resp.Header.ContentLength()
